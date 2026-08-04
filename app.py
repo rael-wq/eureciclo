@@ -100,11 +100,16 @@ def carregar_dados_finais():
     df = df.dropna(subset=['SKU'])
     
     # 5. Tratamento de dados numéricos vindos do Sheets
+    # 5. Tratamento de dados numéricos vindos do Sheets
     for col in COLUNAS_NUMERICAS:
         if col in df.columns:
-            # O GSheets pode entregar números já formatados como int/float ou como texto
-            df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            # Verifica se o Google Sheets já enviou a coluna formatada como número
+            if pd.api.types.is_numeric_dtype(df[col]):
+                df[col] = df[col].fillna(0)
+            else:
+                # Se for texto, aplica a regra de conversão de moeda brasileira
+                df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
     return df
 
