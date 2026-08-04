@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import requests
 from streamlit_oauth import OAuth2Component
+from streamlit_gsheets import GSheetsConnection
 
 # ==========================================
 # CONFIGURAÇÃO GERAL
@@ -15,7 +16,6 @@ COLUNAS_NUMERICAS = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada',
 # ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
 # ==========================================
-# Essas credenciais serão lidas do painel seguro do Streamlit Cloud (Settings -> Secrets)
 try:
     CLIENT_ID = st.secrets["GOOGLE_CLIENT_ID"]
     CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
@@ -24,7 +24,6 @@ except KeyError:
     st.error("⚠️ Credenciais de login não configuradas no Streamlit Secrets.")
     st.stop()
 
-# Configuração da URL de comunicação com o Google
 oauth2 = OAuth2Component(CLIENT_ID, CLIENT_SECRET, 
                          "https://accounts.google.com/o/oauth2/v2/auth", 
                          "https://oauth2.googleapis.com/token", 
@@ -32,7 +31,6 @@ oauth2 = OAuth2Component(CLIENT_ID, CLIENT_SECRET,
                          "https://oauth2.googleapis.com/revoke")
 
 def check_login():
-    # Se já logou e o e-mail está salvo na memória da página, verifica o domínio
     if "user_email" in st.session_state:
         if st.session_state["user_email"].endswith("@nhecotech.com"):
             return True
@@ -40,11 +38,9 @@ def check_login():
             st.error(f"❌ Acesso negado: {st.session_state['user_email']} não autorizado.")
             return False
 
-    # Se não está logado, exibe a interface de login
     st.markdown("### 🔒 Acesso Restrito")
     st.markdown("Faça login com sua conta corporativa `@nhecotech.com` para visualizar o dashboard.")
     
-    # Cria o botão do Google
     result = oauth2.authorize_button(
         name="Continuar com o Google",
         icon="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg",
@@ -54,60 +50,74 @@ def check_login():
         use_container_width=True
     )
 
-    # Quando o usuário faz login, o Google devolve o resultado
     if result:
         token = result.get("token")
-        
-        # Fazemos uma pergunta rápida ao Google: "Qual o e-mail desse token?"
         user_req = requests.get("https://www.googleapis.com/oauth2/v1/userinfo", 
                                 headers={"Authorization": f"Bearer {token['access_token']}"})
         email = user_req.json().get("email", "")
 
-        # Verifica a restrição do domínio
         if email.endswith("@nhecotech.com"):
             st.session_state["user_email"] = email
-            st.rerun() # Atualiza a página para carregar os gráficos
+            st.rerun()
         else:
             st.error(f"❌ O e-mail {email} não pertence à nhecotech.com.")
             return False
             
     return False
 
-# Trava de segurança: Se a função retornar Falso, o código para de rodar aqui.
 if not check_login():
     st.stop()
 
 # ==========================================
-# (Se chegou até aqui, está logado)
-# CARREGAMENTO DOS DADOS E DASHBOARD 
+# CARREGAMENTO DOS DADOS DIRETAMENTE DO SHEETS
 # ==========================================
-
-# Mostra quem está logado e dá a opção de sair (na barra lateral)
 st.sidebar.success(f"Logado como: {st.session_state['user_email']}")
 if st.sidebar.button("Sair (Logout)"):
     del st.session_state["user_email"]
     st.rerun()
 
-@st.cache_data(ttl=60)
+# O ttl agora é 600 segundos (10 minutos) para evitar bloqueio da API do Google
+@st.cache_data(ttl=600)
 def carregar_dados_finais():
-    arquivo = 'OPS_Cobertura_de_Estoque_análi_Demanda_Visão_Gerencial.csv'
-    df_raw = pd.read_csv(arquivo, sep=',', skiprows=4)
+    # Cria a conexão com o Google Sheets usando as credenciais do Secrets
+    conn = st.connection("gsheets", type=GSheetsConnection)
     
-    idx_sku = df_raw.columns.get_loc('SKU')
-    df = df_raw.iloc[:, idx_sku:].copy()
+    # Lê a aba "Demanda", pulando as 4 primeiras linhas como fazíamos no CSV
+    df_raw = conn.read(worksheet="Demanda", skiprows=4)
     
-    df.columns = [col.replace('.1', '').strip() for col in df.columns]
+    # 2. Isola a tabela detalhada (Começa a partir da coluna SKU)
+    if 'SKU' in df_raw.columns:
+        idx_sku = df_raw.columns.get_loc('SKU')
+        df = df_raw.iloc[:, idx_sku:].copy()
+    else:
+        # Fallback caso a estrutura mude
+        df = df_raw.copy()
+    
+    # 3. Limpa os nomes das colunas (tira '.1' gerado por colunas duplicadas)
+    df.columns = [str(col).replace('.1', '').strip() for col in df.columns]
+    
+    # 4. Remove linhas vazias no final
     df = df.dropna(subset=['SKU'])
     
+    # 5. Tratamento de dados numéricos vindos do Sheets
     for col in COLUNAS_NUMERICAS:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.replace('.', '', regex=False)
+            # O GSheets pode entregar números já formatados como int/float ou como texto
+            df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
     return df
 
-df = carregar_dados_finais()
+# Tratamento de erro na conexão visual
+try:
+    df = carregar_dados_finais()
+except Exception as e:
+    st.error(f"Erro ao conectar com a planilha: {e}")
+    st.stop()
 
+# ==========================================
+# INTERFACE E DASHBOARD
+# ==========================================
 st.title("📊 Visão Gerencial - Demanda de Estoque")
 st.markdown("Visão executiva detalhada por SKU com filtros dinâmicos.")
 
