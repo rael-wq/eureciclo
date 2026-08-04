@@ -51,7 +51,7 @@ def load_data():
     
     return df
 df = load_data()
-
+st.write(df.columns)
 
 # ==========================================
 # 3. INTERFACE E DASHBOARD
