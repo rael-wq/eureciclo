@@ -14,6 +14,10 @@ if not check_login():
     st.error("🔒 Acesso restrito. Faça login usando sua conta corporativa @nhecotech.com.")
     st.stop()
 
+# Lista de colunas numéricas transformada em variável global 
+# para facilitar o reuso tanto no tratamento quanto na formatação visual
+COLUNAS_NUMERICAS = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
+
 # ==========================================
 # CARREGAMENTO E TRATAMENTO DOS DADOS
 # ==========================================
@@ -34,9 +38,8 @@ def carregar_dados_finais():
     # 4. Remove linhas vazias no final
     df = df.dropna(subset=['SKU'])
     
-    # 5. Converte os números (Tira pontos de milhar para o Python conseguir somar)
-    colunas_numericas = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
-    for col in colunas_numericas:
+    # 5. Converte os números (Tira pontos de milhar para o Python conseguir somar nos bastidores)
+    for col in COLUNAS_NUMERICAS:
         if col in df.columns:
             df[col] = df[col].astype(str).str.replace('.', '', regex=False)
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -78,7 +81,7 @@ total_contratada = df_filtrado['Total Contratada'].sum()
 total_projetada = df_filtrado['Projetada'].sum()
 total_em_aberto = df_filtrado['Em Aberto'].sum()
 
-# Mostra os KPIs formatados no padrão visual brasileiro (ex: 1.500.000)
+# Mostra os KPIs formatados com separador de milhar
 kpi1.metric("Demanda Total", f"{total_demanda:,.0f}".replace(",", "."))
 kpi2.metric("Total Contratada", f"{total_contratada:,.0f}".replace(",", "."))
 kpi3.metric("Demanda Projetada", f"{total_projetada:,.0f}".replace(",", "."))
@@ -94,14 +97,19 @@ with col_graf1:
     df_uf = df_filtrado.groupby('UF', as_index=False)['DEMANDA TOTAL'].sum().sort_values('DEMANDA TOTAL', ascending=False)
     fig_uf = px.bar(df_uf, x='UF', y='DEMANDA TOTAL', 
                     title="Demanda Total por UF", 
-                    text_auto='.2s', color='DEMANDA TOTAL', color_continuous_scale="Blues")
+                    color='DEMANDA TOTAL', color_continuous_scale="Blues")
+    # Força a exibição de milhares com ponto no gráfico de barras
+    fig_uf.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
+    fig_uf.update_layout(separators=".,", yaxis_tickformat=",.0f")
     st.plotly_chart(fig_uf, use_container_width=True)
 
 with col_graf2:
     df_mat = df_filtrado.groupby('material', as_index=False)['DEMANDA TOTAL'].sum()
     fig_mat = px.pie(df_mat, values='DEMANDA TOTAL', names='material', 
                      title="Distribuição da Demanda por Material", hole=0.4)
-    fig_mat.update_traces(textposition='inside', textinfo='percent+label')
+    # Ajusta os rótulos que aparecem ao passar o mouse (hover)
+    fig_mat.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="%{label}: %{value:,.0f}<extra></extra>")
+    fig_mat.update_layout(separators=".,")
     st.plotly_chart(fig_mat, use_container_width=True)
 
 st.markdown("#### Composição do Estoque por UF")
@@ -109,8 +117,20 @@ df_composicao = df_filtrado.groupby('UF', as_index=False)[['Compensada', 'Em Abe
 fig_comp = px.bar(df_composicao, x='UF', y=['Compensada', 'Em Aberto', 'Projetada'],
                   title="Composição da Demanda: Compensada vs Em Aberto vs Projetada",
                   barmode='stack', color_discrete_sequence=['#2ecc71', '#e74c3c', '#3498db'])
+
+# Ajusta formatação e tooltip no gráfico empilhado
+fig_comp.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
+fig_comp.update_layout(separators=".,", yaxis_tickformat=",.0f")
 st.plotly_chart(fig_comp, use_container_width=True)
 
 # --- TABELA DE DADOS ---
 with st.expander("Ver Dados Detalhados"):
-    st.dataframe(df_filtrado, use_container_width=True)
+    # Cria uma cópia puramente visual para não estragar a matemática dos filtros
+    df_exibicao = df_filtrado.copy()
+    
+    # Aplica o formato de "1.000.000" para cada coluna da lista que contém números
+    for col in COLUNAS_NUMERICAS:
+        if col in df_exibicao.columns:
+            df_exibicao[col] = df_exibicao[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+            
+    st.dataframe(df_exibicao, use_container_width=True)
