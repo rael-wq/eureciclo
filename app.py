@@ -2,120 +2,69 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# Configuração da Página
 st.set_page_config(page_title="Visão Gerencial - Demanda", layout="wide")
 
-# ==========================================
-# 1. AUTENTICAÇÃO GOOGLE (@nhecotech.com)
-# ==========================================
-# Nota: Em produção, utilize pacotes como 'streamlit-google-auth' para gerar o botão de login real via OAuth2.
 def check_login():
-    """ 
-    Simulação da lógica de verificação de login.
-    O sistema checaria o domínio do e-mail autenticado pelo Google.
-    """
-    user_email = "usuario@nhecotech.com" # Exemplo do retorno do Google Auth
-    if user_email.endswith("@nhecotech.com"):
-        return True
-    return False
+    return True # Temporariamente liberado para focarmos em arrumar os dados
 
 if not check_login():
-    st.error("🔒 Acesso restrito. Faça login usando sua conta Google corporativa @nhecotech.com.")
-    st.stop() # Interrompe a renderização do resto da página
+    st.error("🔒 Acesso restrito.")
+    st.stop()
 
-
-# ==========================================
-# 2. CARREGAMENTO DOS DADOS (Tempo Real)
-# ==========================================
-# O "ttl=60" faz com que o cache expire em 1 minuto, recarregando os dados novos da planilha.
-# Mude o nome aqui
+# Nome da função alterado novamente para forçar a quebra do cache
 @st.cache_data(ttl=60)
-def carregar_dados():
+def carregar_dados_seguro():
     arquivo = 'OPS_Cobertura_de_Estoque_análi_Demanda_Visão_Gerencial.csv'
+    
+    # Tenta ler com vírgula
     df = pd.read_csv(arquivo, sep=',')
     
+    # Se ler tudo como uma coluna só, tenta com ponto e vírgula
     if len(df.columns) == 1:
         df = pd.read_csv(arquivo, sep=';')
         
+    # Limpa espaços vazios invisíveis no início e fim dos nomes
     df.columns = df.columns.str.strip()
     
+    # Tratamento de dados numéricos
     colunas_numericas = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
     for col in colunas_numericas:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
-    
+            
     return df
 
-# E não esqueça de mudar aqui também, onde ele chama a função:
-df = carregar_dados()
+# 1. Carrega os dados
+df = carregar_dados_seguro()
 
-# ==========================================
-# 3. INTERFACE E DASHBOARD
-# ==========================================
 st.title("📊 Visão Gerencial - Demanda de Estoque")
-st.markdown("Visão executiva da aba *[Demanda] Visão Gerencial*. Atualização sincronizada com a planilha.")
 
-# Filtros Laterais
-st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg", width=50)
+# 2. MODO DIAGNÓSTICO: Mostra as colunas na tela para descobrirmos o problema
+st.warning("⚠️ MODO DIAGNÓSTICO ATIVADO: Veja abaixo as colunas que o Streamlit encontrou no seu arquivo.")
+st.write("Lista exata de colunas encontradas:", df.columns.tolist())
+st.write("Total de colunas:", len(df.columns))
+
+# 3. FILTROS (Com trava de segurança para não dar erro na tela)
 st.sidebar.header("Filtros de Análise")
-ano_selecionado = st.sidebar.multiselect("Ano Base", sorted(df['Ano Base'].dropna().astype(str).unique()))
-uf_selecionada = st.sidebar.multiselect("Estado (UF)", sorted(df['UF'].dropna().unique()))
-material_selecionado = st.sidebar.multiselect("Material", sorted(df['material'].dropna().unique()))
 
-# Aplicação dos Filtros
-df_filtrado = df.copy()
-if ano_selecionado:
-    df_filtrado = df_filtrado[df_filtrado['Ano Base'].astype(str).isin(ano_selecionado)]
-if uf_selecionada:
-    df_filtrado = df_filtrado[df_filtrado['UF'].isin(uf_selecionada)]
-if material_selecionado:
-    df_filtrado = df_filtrado[df_filtrado['material'].isin(material_selecionado)]
+# Só cria o filtro se a coluna existir, senão avisa o erro
+if 'Ano Base' in df.columns:
+    ano_selecionado = st.sidebar.multiselect("Ano Base", sorted(df['Ano Base'].dropna().astype(str).unique()))
+else:
+    st.sidebar.error("❌ Coluna 'Ano Base' não encontrada!")
+    ano_selecionado = []
 
+if 'UF' in df.columns:
+    uf_selecionada = st.sidebar.multiselect("Estado (UF)", sorted(df['UF'].dropna().unique()))
+else:
+    st.sidebar.error("❌ Coluna 'UF' não encontrada!")
+    uf_selecionada = []
 
-# --- SEÇÃO DE KPIs ---
-st.subheader("Indicadores Chave (KPIs)")
-kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+if 'material' in df.columns:
+    material_selecionado = st.sidebar.multiselect("Material", sorted(df['material'].dropna().unique()))
+else:
+    material_selecionado = []
 
-total_demanda = df_filtrado['DEMANDA TOTAL'].sum()
-total_contratada = df_filtrado['Total Contratada'].sum()
-total_projetada = df_filtrado['Projetada'].sum()
-total_em_aberto = df_filtrado['Em Aberto'].sum()
-
-kpi1.metric("Demanda Total", f"{total_demanda:,.0f}")
-kpi2.metric("Total Contratada", f"{total_contratada:,.0f}")
-kpi3.metric("Demanda Projetada", f"{total_projetada:,.0f}")
-kpi4.metric("Em Aberto", f"{total_em_aberto:,.0f}")
-
-st.divider()
-
-# --- SEÇÃO DE GRÁFICOS ---
-st.subheader("Análise Visual")
-col_graf1, col_graf2 = st.columns(2)
-
-with col_graf1:
-    # 1. Gráfico de Demanda por UF
-    df_uf = df_filtrado.groupby('UF', as_index=False)['DEMANDA TOTAL'].sum().sort_values('DEMANDA TOTAL', ascending=False)
-    fig_uf = px.bar(df_uf, x='UF', y='DEMANDA TOTAL', 
-                    title="Demanda Total por UF", 
-                    text_auto='.2s', color='DEMANDA TOTAL', color_continuous_scale="Blues")
-    st.plotly_chart(fig_uf, use_container_width=True)
-
-with col_graf2:
-    # 2. Gráfico de Distribuição por Material
-    df_mat = df_filtrado.groupby('material', as_index=False)['DEMANDA TOTAL'].sum()
-    fig_mat = px.pie(df_mat, values='DEMANDA TOTAL', names='material', 
-                     title="Distribuição da Demanda por Material", hole=0.4)
-    fig_mat.update_traces(textposition='inside', textinfo='percent+label')
-    st.plotly_chart(fig_mat, use_container_width=True)
-
-# 3. Composição da Demanda (Contratada vs Projetada)
-st.markdown("#### Composição do Estoque por UF")
-df_composicao = df_filtrado.groupby('UF', as_index=False)[['Compensada', 'Em Aberto', 'Projetada']].sum()
-fig_comp = px.bar(df_composicao, x='UF', y=['Compensada', 'Em Aberto', 'Projetada'],
-                  title="Composição da Demanda: Compensada vs Em Aberto vs Projetada",
-                  barmode='stack', color_discrete_sequence=['#2ecc71', '#e74c3c', '#3498db'])
-st.plotly_chart(fig_comp, use_container_width=True)
-
-# --- TABELA DE DADOS ---
-with st.expander("Ver Dados Detalhados"):
-    st.dataframe(df_filtrado, use_container_width=True)
+# Mostra a tabela crua para conferência
+st.markdown("### Dados Carregados")
+st.dataframe(df.head())
