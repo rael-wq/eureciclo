@@ -30,17 +30,26 @@ if not check_login():
 # O "ttl=60" faz com que o cache expire em 1 minuto, recarregando os dados novos da planilha.
 @st.cache_data(ttl=60)
 def load_data():
-    # Para leitura em tempo real da planilha, insira o link de exportação CSV do Google Sheets
-    # ou conecte a API. Aqui leremos o arquivo CSV atual para montar a estrutura.
-    df = pd.read_csv('OPS_Cobertura_de_Estoque_análi_Demanda_Visão_Gerencial.csv')
+    # Adicionamos sep=';' para forçar a leitura do padrão brasileiro
+    # Se ainda der erro, você pode tentar sep=','
+    try:
+        df = pd.read_csv('OPS_Cobertura_de_Estoque_análi_Demanda_Visão_Gerencial.csv', sep=';')
+    except Exception:
+        # Se falhar, tenta com vírgula normal
+        df = pd.read_csv('OPS_Cobertura_de_Estoque_análi_Demanda_Visão_Gerencial.csv')
     
-    # Tratamento de dados numéricos (remove vírgulas indevidas e força conversão)
+    # Limpa espaços em branco ocultos nos nomes das colunas
+    df.columns = df.columns.str.strip()
+    
+    # Tratamento de dados numéricos
     colunas_numericas = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
+    
     for col in colunas_numericas:
-        df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
+        # Só tenta converter se a coluna realmente existir no arquivo
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
     return df
-
 df = load_data()
 
 
