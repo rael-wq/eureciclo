@@ -14,8 +14,7 @@ if not check_login():
     st.error("🔒 Acesso restrito. Faça login usando sua conta corporativa @nhecotech.com.")
     st.stop()
 
-# Lista de colunas numéricas transformada em variável global 
-# para facilitar o reuso tanto no tratamento quanto na formatação visual
+# Lista de colunas numéricas 
 COLUNAS_NUMERICAS = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
 
 # ==========================================
@@ -125,12 +124,17 @@ st.plotly_chart(fig_comp, use_container_width=True)
 
 # --- TABELA DE DADOS ---
 with st.expander("Ver Dados Detalhados"):
-    # Cria uma cópia puramente visual para não estragar a matemática dos filtros
-    df_exibicao = df_filtrado.copy()
     
-    # Aplica o formato de "1.000.000" para cada coluna da lista que contém números
-    for col in COLUNAS_NUMERICAS:
-        if col in df_exibicao.columns:
-            df_exibicao[col] = df_exibicao[col].apply(lambda x: f"{x:,.0f}".replace(",", "."))
+    # Função para criar a "máscara visual" de formatação brasileira
+    def formatar_numero_br(valor):
+        try:
+            return f"{valor:,.0f}".replace(",", ".")
+        except:
+            return valor
             
-    st.dataframe(df_exibicao, use_container_width=True)
+    # Cria o dicionário aplicando a formatação apenas nas colunas numéricas que existem na tabela
+    colunas_presentes = [col for col in COLUNAS_NUMERICAS if col in df_filtrado.columns]
+    formato_dict = {col: formatar_numero_br for col in colunas_presentes}
+    
+    # Usando style.format mudamos APENAS a exibição, preservando a matemática e a ordenação real das colunas!
+    st.dataframe(df_filtrado.style.format(formato_dict), use_container_width=True)
