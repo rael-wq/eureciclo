@@ -28,30 +28,26 @@ if not check_login():
 # 2. CARREGAMENTO DOS DADOS (Tempo Real)
 # ==========================================
 # O "ttl=60" faz com que o cache expire em 1 minuto, recarregando os dados novos da planilha.
+# Mude o nome aqui
 @st.cache_data(ttl=60)
-def load_data():
+def carregar_dados():
     arquivo = 'OPS_Cobertura_de_Estoque_análi_Demanda_Visão_Gerencial.csv'
-    
-    # Tenta ler o arquivo com vírgula primeiro (padrão)
     df = pd.read_csv(arquivo, sep=',')
     
-    # Se o Pandas entender que o arquivo inteiro é uma coluna só, 
-    # significa que o separador real no seu arquivo é o ponto e vírgula (;)
     if len(df.columns) == 1:
         df = pd.read_csv(arquivo, sep=';')
         
-    # Limpa espaços em branco ocultos nos nomes das colunas (por segurança)
     df.columns = df.columns.str.strip()
     
-    # Tratamento de dados numéricos
     colunas_numericas = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
-    
     for col in colunas_numericas:
         if col in df.columns:
-            # Troca vírgulas decimais por pontos e converte para número
             df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
     return df
+
+# E não esqueça de mudar aqui também, onde ele chama a função:
+df = carregar_dados()
 
 # ==========================================
 # 3. INTERFACE E DASHBOARD
