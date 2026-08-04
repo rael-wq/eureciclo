@@ -30,28 +30,28 @@ if not check_login():
 # O "ttl=60" faz com que o cache expire em 1 minuto, recarregando os dados novos da planilha.
 @st.cache_data(ttl=60)
 def load_data():
-    # Adicionamos sep=';' para forçar a leitura do padrão brasileiro
-    # Se ainda der erro, você pode tentar sep=','
-    try:
-        df = pd.read_csv('OPS_Cobertura_de_Estoque_análi_Demanda_Visão_Gerencial.csv', sep=';')
-    except Exception:
-        # Se falhar, tenta com vírgula normal
-        df = pd.read_csv('OPS_Cobertura_de_Estoque_análi_Demanda_Visão_Gerencial.csv')
+    arquivo = 'OPS_Cobertura_de_Estoque_análi_Demanda_Visão_Gerencial.csv'
     
-    # Limpa espaços em branco ocultos nos nomes das colunas
+    # Tenta ler o arquivo com vírgula primeiro (padrão)
+    df = pd.read_csv(arquivo, sep=',')
+    
+    # Se o Pandas entender que o arquivo inteiro é uma coluna só, 
+    # significa que o separador real no seu arquivo é o ponto e vírgula (;)
+    if len(df.columns) == 1:
+        df = pd.read_csv(arquivo, sep=';')
+        
+    # Limpa espaços em branco ocultos nos nomes das colunas (por segurança)
     df.columns = df.columns.str.strip()
     
     # Tratamento de dados numéricos
     colunas_numericas = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
     
     for col in colunas_numericas:
-        # Só tenta converter se a coluna realmente existir no arquivo
         if col in df.columns:
+            # Troca vírgulas decimais por pontos e converte para número
             df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
     
     return df
-df = load_data()
-st.write(df.columns)
 
 # ==========================================
 # 3. INTERFACE E DASHBOARD
