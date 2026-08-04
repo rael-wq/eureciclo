@@ -16,21 +16,28 @@ if not check_login():
 def carregar_dados_seguro():
     arquivo = 'OPS_Cobertura_de_Estoque_análi_Demanda_Visão_Gerencial.csv'
     
-    # Tenta ler com vírgula
-    df = pd.read_csv(arquivo, sep=',')
+    # 1. Pula as 4 primeiras linhas (skiprows=4) que estão sujas/vazias no CSV
+    df = pd.read_csv(arquivo, sep=',', skiprows=4)
     
-    # Se ler tudo como uma coluna só, tenta com ponto e vírgula
-    if len(df.columns) == 1:
-        df = pd.read_csv(arquivo, sep=';')
+    # 2. Localiza a coluna 'SKU' e corta a tabela para pegar apenas os dados da direita
+    if 'SKU' in df.columns:
+        idx_sku = df.columns.get_loc('SKU')
+        df = df.iloc[:, idx_sku:].copy()
         
-    # Limpa espaços vazios invisíveis no início e fim dos nomes
-    df.columns = df.columns.str.strip()
+        # O Pandas coloca um ".1" em nomes de colunas repetidas. Vamos limpar isso:
+        df.columns = [col.replace('.1', '').strip() for col in df.columns]
     
-    # Tratamento de dados numéricos
+    # 3. Remove as linhas completamente vazias que ficam no final do arquivo
+    df = df.dropna(subset=['SKU'])
+    
+    # 4. Tratamento matemático (Remove os pontos de milhar para o Python somar corretamente)
     colunas_numericas = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
+    
     for col in colunas_numericas:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
+            # Remove o ponto e converte o texto para número
+            df[col] = df[col].astype(str).str.replace('.', '', regex=False)
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
     return df
 
