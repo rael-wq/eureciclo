@@ -56,8 +56,7 @@ if "user_token" not in st.session_state:
 token_info = st.session_state["user_token"]
 id_token = token_info.get("id_token")
 
-import jwt # Requer a biblioteca PyJWT no requirements.txt (ou decodificação manual base64)
-# Como alternativa sem biblioteca extra, assumimos a validação do email via token decodificado
+import jwt # Requer a biblioteca PyJWT no requirements.txt
 try:
     user_info = jwt.decode(id_token, options={"verify_signature": False})
     user_email = user_info.get("email", "")
@@ -79,13 +78,14 @@ except Exception as e:
 @st.cache_data(ttl=300)
 def carregar_dados():
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read()
     
-    # Lista das colunas numéricas de demanda
+    # LÊ UMA ABA ESPECÍFICA (Substitua "NOME_DA_SUA_ABA" pelo nome real)
+    df = conn.read(worksheet="[Demanda] Visão Gerencial")
+    
+    # Lista das colunas numéricas de demanda esperadas
     colunas_demanda = ["Compensada", "Em Aberto", "Projetada"]
     
     # Limpeza de dados: garante que as colunas sejam tratadas como números (float)
-    # Remove pontos de milhares e converte vírgula decimal se vier formatado do Sheets
     for col in colunas_demanda:
         if col in df.columns:
             if df[col].dtype == object:
@@ -99,7 +99,7 @@ df = carregar_dados()
 # ==========================================
 # 4. BARRA LATERAL (FILTROS E CONTROLES)
 # ==========================================
-st.sidebar.image("https://via.placeholder.com/150", caption="Nhecotech") # Substitua pelo logo da empresa
+st.sidebar.image("https://via.placeholder.com/150", caption="Nhecotech") # Substitua pelo logo
 st.sidebar.write(f"Bem-vindo, **{user_info.get('name', 'Usuário')}**")
 
 if st.sidebar.button("🚪 Sair"):
@@ -160,7 +160,7 @@ if 'Em Aberto' in df.columns:
 if 'Projetada' in df.columns:
     df['% do Total (Projetada)'] = df['Projetada'] / demanda_total if demanda_total > 0 else 0
 
-# Separando as colunas descritivas (ex: Cliente, Produto, Mês, etc) das colunas de cálculo
+# Separando as colunas descritivas das colunas de cálculo
 colunas_identificacao = [
     col for col in df.columns 
     if col not in colunas_demanda and col not in ['% do Total (Em Aberto)', '% do Total (Projetada)']
