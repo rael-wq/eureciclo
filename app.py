@@ -189,46 +189,64 @@ with col_graf2:
     fig_mat.update_layout(separators=".,")
     st.plotly_chart(fig_mat, use_container_width=True)
 
-st.markdown("#### Composição do Estoque por UF")
+st.markdown("#### Composição do Estoque (Visão por UF e SKU)")
 
-# Filtro específico para o gráfico de Composição
+# Filtro unificado para os dois gráficos de Composição
 opcoes_demanda = ['Compensada', 'Em Aberto', 'Projetada']
 demandas_grafico = st.multiselect(
-    "Selecione as Demandas para visualizar no gráfico:", 
+    "Selecione as Demandas para visualizar nos gráficos abaixo:", 
     options=opcoes_demanda, 
     default=opcoes_demanda
 )
 
 if demandas_grafico:
-    df_composicao = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
-    
-    # Mapa de cores fixo para garantir que as cores não mudem ao desmarcar uma opção
+    # Mapa de cores fixo
     mapa_cores = {
         'Compensada': '#2ecc71', 
         'Em Aberto': '#e74c3c', 
         'Projetada': '#3498db'
     }
     
-    fig_comp = px.bar(
-        df_composicao, 
+    # --- GRÁFICO 1: COMPOSIÇÃO POR UF ---
+    df_composicao_uf = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
+    fig_comp_uf = px.bar(
+        df_composicao_uf, 
         x='UF', 
         y=demandas_grafico, 
-        title="Composição da Demanda", 
+        title="Composição da Demanda por UF", 
         barmode='stack', 
         color_discrete_map=mapa_cores
     )
-    fig_comp.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
-    
-    # === AQUI ESTÁ A ORDENAÇÃO Z-A (categoryorder: 'total descending') ===
-    fig_comp.update_layout(
+    fig_comp_uf.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
+    fig_comp_uf.update_layout(
         separators=".,", 
         yaxis_tickformat=",.0f", 
         legend_title_text="Tipo de Demanda",
         xaxis={'categoryorder': 'total descending'} 
     )
-    st.plotly_chart(fig_comp, use_container_width=True)
+    st.plotly_chart(fig_comp_uf, use_container_width=True)
+
+    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU ---
+    df_composicao_sku = df_filtrado.groupby('SKU', as_index=False)[opcoes_demanda].sum()
+    fig_comp_sku = px.bar(
+        df_composicao_sku, 
+        x='SKU', 
+        y=demandas_grafico, 
+        title="Composição da Demanda por SKU", 
+        barmode='stack', 
+        color_discrete_map=mapa_cores
+    )
+    fig_comp_sku.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
+    fig_comp_sku.update_layout(
+        separators=".,", 
+        yaxis_tickformat=",.0f", 
+        legend_title_text="Tipo de Demanda",
+        xaxis={'categoryorder': 'total descending'} 
+    )
+    st.plotly_chart(fig_comp_sku, use_container_width=True)
+
 else:
-    st.info("Selecione pelo menos um tipo de demanda para exibir o gráfico.")
+    st.info("Selecione pelo menos um tipo de demanda para exibir os gráficos.")
 
 # ==========================================
 # TABELA DETALHADA COM %
