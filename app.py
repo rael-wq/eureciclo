@@ -99,7 +99,7 @@ def carregar_dados_finais():
     # 4. Remove linhas vazias no final
     df = df.dropna(subset=['SKU'])
     
-   # 5. Tratamento de dados numéricos vindos do Sheets
+    # 5. Tratamento de dados numéricos vindos do Sheets
     for col in COLUNAS_NUMERICAS:
         if col in df.columns:
             # Verifica se o Google Sheets já enviou a coluna formatada como número
@@ -130,6 +130,14 @@ ano_selecionado = st.sidebar.multiselect("Ano Base", sorted(df['Ano Base'].dropn
 uf_selecionada = st.sidebar.multiselect("Estado (UF)", sorted(df['UF'].dropna().unique()))
 material_selecionado = st.sidebar.multiselect("Material", sorted(df['material'].dropna().unique()))
 
+st.sidebar.markdown("---")
+# NOVO: Filtro para tipos de Demanda a exibir na tabela
+demandas_selecionadas = st.sidebar.multiselect(
+    "Tipos de Demanda (Tabela)", 
+    ['Compensada', 'Em Aberto', 'Projetada'], 
+    default=['Compensada', 'Em Aberto', 'Projetada']
+)
+
 df_filtrado = df.copy()
 if ano_selecionado:
     df_filtrado = df_filtrado[df_filtrado['Ano Base'].astype(str).isin(ano_selecionado)]
@@ -138,24 +146,39 @@ if uf_selecionada:
 if material_selecionado:
     df_filtrado = df_filtrado[df_filtrado['material'].isin(material_selecionado)]
 
-st.sidebar.divider() # Cria uma linha visual separadora
+st.sidebar.divider() 
 if st.sidebar.button("🔄 Atualizar Dados"):
-    st.cache_data.clear() # Limpa o cache da memória
-    st.rerun()            # Recarrega a página instantaneamente
+    st.cache_data.clear() 
+    st.rerun()            
 
+# ==========================================
+# CÁLCULOS GLOBAIS E KPIs COM %
+# ==========================================
 st.subheader("Indicadores Chave (KPIs)")
-kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-total_demanda = df_filtrado['DEMANDA TOTAL'].sum()
-total_contratada = df_filtrado['Total Contratada'].sum()
-total_projetada = df_filtrado['Projetada'].sum()
-total_em_aberto = df_filtrado['Em Aberto'].sum()
 
-kpi1.metric("Demanda Total", f"{total_demanda:,.0f}".replace(",", "."))
-kpi2.metric("Total Contratada", f"{total_contratada:,.0f}".replace(",", "."))
-kpi3.metric("Demanda Projetada", f"{total_projetada:,.0f}".replace(",", "."))
-kpi4.metric("Em Aberto", f"{total_em_aberto:,.0f}".replace(",", "."))
+total_demanda = df_filtrado['DEMANDA TOTAL'].sum()
+total_compensada = df_filtrado['Compensada'].sum() if 'Compensada' in df_filtrado.columns else 0
+total_em_aberto = df_filtrado['Em Aberto'].sum() if 'Em Aberto' in df_filtrado.columns else 0
+total_projetada = df_filtrado['Projetada'].sum() if 'Projetada' in df_filtrado.columns else 0
+
+# Base de cálculo para os percentuais globais (Compensada + Em Aberto + Projetada)
+soma_demanda_calc = total_compensada + total_em_aberto + total_projetada
+
+perc_em_aberto = (total_em_aberto / soma_demanda_calc * 100) if soma_demanda_calc > 0 else 0
+perc_projetada = (total_projetada / soma_demanda_calc * 100) if soma_demanda_calc > 0 else 0
+
+kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+
+kpi1.metric("Demanda Total (Calculada)", f"{soma_demanda_calc:,.0f}".replace(",", "."))
+kpi2.metric("Compensada", f"{total_compensada:,.0f}".replace(",", "."))
+kpi3.metric("Em Aberto", f"{total_em_aberto:,.0f}".replace(",", "."), f"{perc_em_aberto:.1f}%", delta_color="off")
+kpi4.metric("Projetada", f"{total_projetada:,.0f}".replace(",", "."), f"{perc_projetada:.1f}%", delta_color="off")
+
 st.divider()
 
+# ==========================================
+# GRÁFICOS
+# ==========================================
 st.subheader("Análise Visual")
 col_graf1, col_graf2 = st.columns(2)
 
@@ -180,12 +203,39 @@ fig_comp.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
 fig_comp.update_layout(separators=".,", yaxis_tickformat=",.0f")
 st.plotly_chart(fig_comp, use_container_width=True)
 
+# ==========================================
+# TABELA DETALHADA COM %
+# ==========================================
 with st.expander("Ver Dados Detalhados"):
+    df_tabela = df_filtrado.copy()
+    
+    # 1. Calcula os indicadores percentuais linha a linha
+    soma_linha = df_tabela['Compensada'] + df_tabela['Em Aberto'] + df_tabela['Projetada']
+    df_tabela['% Em Aberto'] = (df_tabela['Em Aberto'] / soma_linha).fillna(0)
+    df_tabela['% Projetada'] = (df_tabela['Projetada'] / soma_linha).fillna(0)
+    
+    # 2. Oculta da tabela as colunas de demanda que o usuário desmarcou no filtro lateral
+    todas_demandas = ['Compensada', 'Em Aberto', 'Projetada']
+    colunas_remover = [col for col in todas_demandas if col not in demandas_selecionadas]
+    df_tabela = df_tabela.drop(columns=colunas_remover, errors='ignore')
+    
+    # 3. Funções de formatação do Pandas Styler
     def formatar_numero_br(valor):
         try:
             return f"{valor:,.0f}".replace(",", ".")
         except:
             return valor
-    colunas_presentes = [col for col in COLUNAS_NUMERICAS if col in df_filtrado.columns]
+            
+    def formatar_percentual(valor):
+        try:
+            return f"{valor * 100:.1f}%".replace(".", ",")
+        except:
+            return valor
+
+    # 4. Aplica a formatação
+    colunas_presentes = [col for col in COLUNAS_NUMERICAS if col in df_tabela.columns]
     formato_dict = {col: formatar_numero_br for col in colunas_presentes}
-    st.dataframe(df_filtrado.style.format(formato_dict), use_container_width=True)
+    formato_dict['% Em Aberto'] = formatar_percentual
+    formato_dict['% Projetada'] = formatar_percentual
+    
+    st.dataframe(df_tabela.style.format(formato_dict), use_container_width=True)
