@@ -155,7 +155,7 @@ def converter_valor_num(val):
     except ValueError:
         return 0.0
 
-
+st.sidebar.image(LOGO_EURECICLO_URL, width=170)
 # ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
 # ==========================================
@@ -219,9 +219,9 @@ if st.sidebar.button("Sair (Logout)"):
 st.sidebar.divider()
 
 # ==========================================
-# LOGO E NAVEGAÇÃO NO MENU LATERAL (ESQUERDA)
+# NAVEGAÇÃO NO MENU LATERAL (ESQUERDA)
 # ==========================================
-st.sidebar.image(LOGO_EURECICLO_URL, width=170)
+
 st.sidebar.markdown("### Gestão de Operações")
 
 pagina_selecionada = st.sidebar.radio(
