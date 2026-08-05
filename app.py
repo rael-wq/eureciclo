@@ -291,7 +291,7 @@ def renderizar_visao_demanda():
         st.dataframe(df_tabela[colunas_exibicao].style.format(formato_dict), use_container_width=True)
 
 # ==========================================
-# FUNÇÃO PARA VISÃO DE COBERTURA (APENAS QUEBRAS)
+# FUNÇÃO PARA VISÃO DE COBERTURA (QUEBRAS)
 # ==========================================
 def renderizar_visao_cobertura():
     try:
@@ -321,18 +321,37 @@ def renderizar_visao_cobertura():
         st.cache_data.clear()
         st.rerun()
 
-    # CÁLCULOS DOS KPIs EXCLUSIVOS DE QUEBRA E DEMANDA
+    # CÁLCULOS DOS KPIs E % DE QUEBRAS EM RELAÇÃO À DEMANDA TOTAL
     total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
     total_quebra_atual = df_filtrado['Quebra Atual'].sum()
     total_quebra_proj = df_filtrado['Quebra Projetada'].sum()
     total_quebra_pipe = df_filtrado['Quebra Projetada c/ pipe Ops'].sum()
 
+    pct_quebra_atual = (total_quebra_atual / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
+    pct_quebra_proj = (total_quebra_proj / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
+    pct_quebra_pipe = (total_quebra_pipe / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
+
     st.subheader("Indicadores Chave de Quebra (KPIs)")
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     kpi1.metric("Demanda TOTAL", f"{total_demanda_cob:,.0f}".replace(",", "."))
-    kpi2.metric("Quebra Atual", f"{total_quebra_atual:,.0f}".replace(",", "."), delta="Déficit" if total_quebra_atual < 0 else "OK")
-    kpi3.metric("Quebra Projetada", f"{total_quebra_proj:,.0f}".replace(",", "."), delta="Déficit" if total_quebra_proj < 0 else "OK")
-    kpi4.metric("Quebra c/ Pipe Ops", f"{total_quebra_pipe:,.0f}".replace(",", "."), delta="Déficit" if total_quebra_pipe < 0 else "OK")
+    kpi2.metric(
+        "Quebra Atual", 
+        f"{total_quebra_atual:,.0f}".replace(",", "."), 
+        f"{pct_quebra_atual:.1f}%".replace(".", ","), 
+        delta_color="off"
+    )
+    kpi3.metric(
+        "Quebra Projetada", 
+        f"{total_quebra_proj:,.0f}".replace(",", "."), 
+        f"{pct_quebra_proj:.1f}%".replace(".", ","), 
+        delta_color="off"
+    )
+    kpi4.metric(
+        "Quebra c/ Pipe Ops", 
+        f"{total_quebra_pipe:,.0f}".replace(",", "."), 
+        f"{pct_quebra_pipe:.1f}%".replace(".", ","), 
+        delta_color="off"
+    )
 
     st.divider()
 
@@ -349,7 +368,6 @@ def renderizar_visao_cobertura():
 
     with col_g2:
         df_mat_quebra = df_filtrado.groupby('material', as_index=False)['Quebra Projetada'].sum()
-        # Converte para valor absoluto para correta proporção no gráfico de rosca
         df_mat_quebra['Abs_Quebra'] = df_mat_quebra['Quebra Projetada'].abs()
         fig_mat_quebra = px.pie(df_mat_quebra, values='Abs_Quebra', names='material', title="Distribuição da Quebra Projetada por Material", hole=0.4)
         fig_mat_quebra.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="%{label}: %{value:,.0f}<extra></extra>")
@@ -379,7 +397,7 @@ def renderizar_visao_cobertura():
         # 2. COMPOSIÇÃO DE QUEBRA POR SKU (BARRAS HORIZONTAIS EMPILHADAS TOP 20 + DEMAIS SKUS)
         df_composicao_sku_quebra = df_filtrado.groupby('SKU', as_index=False)[quebras_grafico].sum()
         df_composicao_sku_quebra['Total_Quebra'] = df_composicao_sku_quebra[quebras_grafico].sum(axis=1)
-        df_composicao_sku_quebra = df_composicao_sku_quebra.sort_values(by='Total_Quebra', ascending=True) # Menores valores (maiores quebras) no topo
+        df_composicao_sku_quebra = df_composicao_sku_quebra.sort_values(by='Total_Quebra', ascending=True)
 
         if len(df_composicao_sku_quebra) > 20:
             df_top20_quebra = df_composicao_sku_quebra.iloc[:20].copy()
@@ -406,26 +424,15 @@ def renderizar_visao_cobertura():
         )
         st.plotly_chart(fig_comp_sku_quebra, use_container_width=True)
 
-    # TABELA DETALHADA COBERTURA / QUEBRAS
+    # TABELA DETALHADA COBERTURA / QUEBRAS (SEM COLUNAS PERCENTUAIS)
     with st.expander("Ver Dados Detalhados de Quebras"):
         df_tabela_cob = df_filtrado.copy()
-        
-        # Percentual de Quebra referente à Demanda TOTAL
-        df_tabela_cob['% Quebra Atual'] = (df_tabela_cob['Quebra Atual'] / df_tabela_cob['Demanda TOTAL']).fillna(0)
-        df_tabela_cob['% Quebra Projetada'] = (df_tabela_cob['Quebra Projetada'] / df_tabela_cob['Demanda TOTAL']).fillna(0)
 
         def formatar_numero_br(v):
             try: return f"{v:,.0f}".replace(",", ".")
             except: return v
 
-        def formatar_percentual(v):
-            try: return f"{v * 100:.1f}%".replace(".", ",")
-            except: return v
-
         formato_dict_cob = {col: formatar_numero_br for col in COLUNAS_NUMERICAS_COBERTURA if col in df_tabela_cob.columns}
-        formato_dict_cob['% Quebra Atual'] = formatar_percentual
-        formato_dict_cob['% Quebra Projetada'] = formatar_percentual
-
         st.dataframe(df_tabela_cob.style.format(formato_dict_cob), use_container_width=True)
 
 # ==========================================
