@@ -201,7 +201,7 @@ demandas_grafico = st.multiselect(
 if demandas_grafico:
     mapa_cores = {'Compensada': '#2ecc71', 'Em Aberto': '#e74c3c', 'Projetada': '#3498db'}
     
-    # --- GRÁFICO 1: COMPOSIÇÃO POR UF (Barras Empilhadas Z-A) ---
+    # --- GRÁFICO 1: COMPOSIÇÃO POR UF (Barras/Colunas Empilhadas Verticais Z-A) ---
     df_composicao_uf = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
     fig_comp_uf = px.bar(
         df_composicao_uf, 
@@ -220,7 +220,7 @@ if demandas_grafico:
     )
     st.plotly_chart(fig_comp_uf, use_container_width=True)
 
-    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU (Colunas Empilhadas Top 20) ---
+    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU (Colunas Empilhadas Verticais Top 20) ---
     # 1. Agrupa por SKU
     df_composicao_sku = df_filtrado.groupby('SKU', as_index=False)[opcoes_demanda].sum()
     
@@ -246,13 +246,13 @@ if demandas_grafico:
     else:
         df_final_sku = df_composicao_sku.copy()
 
-    # 5. Gera o gráfico de colunas empilhadas (px.bar)
+    # 5. Gera o gráfico de COLUNAS empilhadas VERTICALMENTE (px.bar com eixo X categórico)
     fig_comp_sku = px.bar(
         df_final_sku, 
-        x='SKU', 
-        y=demandas_grafico, 
+        x='SKU',             # O eixo X recebe os SKUs (horizontal)
+        y=demandas_grafico,  # O eixo Y recebe os valores (crescendo verticalmente)
         title="Composição da Demanda por SKU (Top 20 + Demais SKUs)", 
-        barmode='stack', # Isso garante que as colunas fiquem empilhadas verticalmente
+        barmode='stack',     # Garante o empilhamento em colunas
         color_discrete_map=mapa_cores
     )
     fig_comp_sku.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
@@ -260,7 +260,6 @@ if demandas_grafico:
         separators=".,", 
         yaxis_tickformat=",.0f", 
         legend_title_text="Tipo de Demanda",
-        # Trava a ordem do eixo X exatamente como estruturamos no DataFrame (Top 20 -> Demais)
         xaxis={'categoryorder': 'array', 'categoryarray': df_final_sku['SKU'].tolist()} 
     )
     st.plotly_chart(fig_comp_sku, use_container_width=True)
