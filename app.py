@@ -220,7 +220,7 @@ if demandas_grafico:
     )
     st.plotly_chart(fig_comp_uf, use_container_width=True)
 
-    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU (Linhas/Área Empilhadas Top 20) ---
+    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU (Colunas Empilhadas Top 20) ---
     # 1. Agrupa por SKU
     df_composicao_sku = df_filtrado.groupby('SKU', as_index=False)[opcoes_demanda].sum()
     
@@ -246,12 +246,13 @@ if demandas_grafico:
     else:
         df_final_sku = df_composicao_sku.copy()
 
-    # 5. Gera o gráfico de área empilhada (px.area)
-    fig_comp_sku = px.area(
+    # 5. Gera o gráfico de colunas empilhadas (px.bar)
+    fig_comp_sku = px.bar(
         df_final_sku, 
         x='SKU', 
         y=demandas_grafico, 
         title="Composição da Demanda por SKU (Top 20 + Demais SKUs)", 
+        barmode='stack', # Isso garante que as colunas fiquem empilhadas verticalmente
         color_discrete_map=mapa_cores
     )
     fig_comp_sku.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
