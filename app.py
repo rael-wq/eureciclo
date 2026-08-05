@@ -138,6 +138,11 @@ if uf_selecionada:
 if material_selecionado:
     df_filtrado = df_filtrado[df_filtrado['material'].isin(material_selecionado)]
 
+st.sidebar.divider() # Cria uma linha visual separadora
+if st.sidebar.button("🔄 Atualizar Dados"):
+    st.cache_data.clear() # Limpa o cache da memória
+    st.rerun()            # Recarrega a página instantaneamente
+
 st.subheader("Indicadores Chave (KPIs)")
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 total_demanda = df_filtrado['DEMANDA TOTAL'].sum()
