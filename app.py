@@ -14,8 +14,7 @@ COLUNAS_NUMERICAS_DEMANDA = ['Compensada', 'Em Aberto', 'Total Contratada', 'Pro
 
 COLUNAS_NUMERICAS_COBERTURA = [
     'Demanda Atual', 'Demanda Projetada', 'Demanda TOTAL', 
-    'Oferta Atual', 'Oferta Projetada (ativos)', 'Oferta Projetada (expansão)', 
-    'Oferta Total', 'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops'
+    'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops'
 ]
 
 # ==========================================
@@ -135,7 +134,7 @@ def carregar_dados_demanda():
 @st.cache_data(ttl=600)
 def carregar_dados_cobertura():
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Lê a aba "Cobertura / SKU (total)" a partir do cabeçalho na célula B18 (linha 18 da planilha)
+    # Lê a aba "Cobertura / SKU (total)" a partir da célula B18 (skiprows=17)
     df_raw = conn.read(worksheet="Cobertura / SKU (total)", skiprows=17)
     
     df = df_raw.copy()
@@ -292,7 +291,7 @@ def renderizar_visao_demanda():
         st.dataframe(df_tabela[colunas_exibicao].style.format(formato_dict), use_container_width=True)
 
 # ==========================================
-# FUNÇÃO PARA VISÃO DE COBERTURA
+# FUNÇÃO PARA VISÃO DE COBERTURA (APENAS QUEBRAS)
 # ==========================================
 def renderizar_visao_cobertura():
     try:
@@ -301,8 +300,8 @@ def renderizar_visao_cobertura():
         st.error(f"Erro ao carregar dados da aba Cobertura / SKU (total): {e}")
         return
 
-    st.title("🛡️ Visão Gerencial - Cobertura de Estoque")
-    st.markdown("Análise detalhada de Oferta vs Demanda e Quebras por SKU (Aba B18:O450).")
+    st.title("🛡️ Visão Gerencial - Cobertura e Quebras de Estoque")
+    st.markdown("Análise detalhada de Quebras e Déficit por SKU (Aba B18:O450).")
 
     st.sidebar.header("Filtros de Cobertura")
     ano_selecionado = st.sidebar.multiselect("Ano Base", sorted(df['Ano Base'].dropna().astype(str).unique()), key="cob_ano")
@@ -322,94 +321,97 @@ def renderizar_visao_cobertura():
         st.cache_data.clear()
         st.rerun()
 
-    # CÁLCULOS DOS KPIs DE COBERTURA
+    # CÁLCULOS DOS KPIs EXCLUSIVOS DE QUEBRA E DEMANDA
     total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
-    total_oferta_cob = df_filtrado['Oferta Total'].sum()
-    perc_cobertura_global = (total_oferta_cob / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
+    total_quebra_atual = df_filtrado['Quebra Atual'].sum()
     total_quebra_proj = df_filtrado['Quebra Projetada'].sum()
+    total_quebra_pipe = df_filtrado['Quebra Projetada c/ pipe Ops'].sum()
 
-    st.subheader("Indicadores Chave de Cobertura (KPIs)")
+    st.subheader("Indicadores Chave de Quebra (KPIs)")
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     kpi1.metric("Demanda TOTAL", f"{total_demanda_cob:,.0f}".replace(",", "."))
-    kpi2.metric("Oferta Total", f"{total_oferta_cob:,.0f}".replace(",", "."))
-    kpi3.metric("Cobertura Geral", f"{perc_cobertura_global:.1f}%".replace(".", ","))
-    kpi4.metric("Quebra Projetada", f"{total_quebra_proj:,.0f}".replace(",", "."), delta="Quebra" if total_quebra_proj < 0 else "OK")
+    kpi2.metric("Quebra Atual", f"{total_quebra_atual:,.0f}".replace(",", "."), delta="Déficit" if total_quebra_atual < 0 else "OK")
+    kpi3.metric("Quebra Projetada", f"{total_quebra_proj:,.0f}".replace(",", "."), delta="Déficit" if total_quebra_proj < 0 else "OK")
+    kpi4.metric("Quebra c/ Pipe Ops", f"{total_quebra_pipe:,.0f}".replace(",", "."), delta="Déficit" if total_quebra_pipe < 0 else "OK")
 
     st.divider()
 
-    # GRÁFICOS VISÃO COBERTURA
-    st.subheader("Análise Visual de Oferta e Cobertura")
+    # GRÁFICOS VISÃO COBERTURA (EXCLUSIVO QUEBRAS)
+    st.subheader("Análise Visual de Quebras")
     col_g1, col_g2 = st.columns(2)
 
     with col_g1:
-        df_uf_oferta = df_filtrado.groupby('UF', as_index=False)['Oferta Total'].sum().sort_values('Oferta Total', ascending=False)
-        fig_uf_oferta = px.bar(df_uf_oferta, x='UF', y='Oferta Total', title="Oferta Total por UF", color='Oferta Total', color_continuous_scale="Greens")
-        fig_uf_oferta.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
-        fig_uf_oferta.update_layout(separators=".,", yaxis_tickformat=",.0f")
-        st.plotly_chart(fig_uf_oferta, use_container_width=True)
+        df_uf_quebra = df_filtrado.groupby('UF', as_index=False)['Quebra Projetada'].sum().sort_values('Quebra Projetada', ascending=True)
+        fig_uf_quebra = px.bar(df_uf_quebra, x='UF', y='Quebra Projetada', title="Quebra Projetada por UF", color='Quebra Projetada', color_continuous_scale="Reds_r")
+        fig_uf_quebra.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
+        fig_uf_quebra.update_layout(separators=".,", yaxis_tickformat=",.0f")
+        st.plotly_chart(fig_uf_quebra, use_container_width=True)
 
     with col_g2:
-        df_mat_oferta = df_filtrado.groupby('material', as_index=False)['Oferta Total'].sum()
-        fig_mat_oferta = px.pie(df_mat_oferta, values='Oferta Total', names='material', title="Distribuição da Oferta por Material", hole=0.4)
-        fig_mat_oferta.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="%{label}: %{value:,.0f}<extra></extra>")
-        fig_mat_oferta.update_layout(separators=".,")
-        st.plotly_chart(fig_mat_oferta, use_container_width=True)
+        df_mat_quebra = df_filtrado.groupby('material', as_index=False)['Quebra Projetada'].sum()
+        # Converte para valor absoluto para correta proporção no gráfico de rosca
+        df_mat_quebra['Abs_Quebra'] = df_mat_quebra['Quebra Projetada'].abs()
+        fig_mat_quebra = px.pie(df_mat_quebra, values='Abs_Quebra', names='material', title="Distribuição da Quebra Projetada por Material", hole=0.4)
+        fig_mat_quebra.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="%{label}: %{value:,.0f}<extra></extra>")
+        fig_mat_quebra.update_layout(separators=".,")
+        st.plotly_chart(fig_mat_quebra, use_container_width=True)
 
-    st.markdown("#### Composição da Oferta por UF e SKU")
-    opcoes_oferta = ['Oferta Atual', 'Oferta Projetada (ativos)', 'Oferta Projetada (expansão)']
-    ofertas_grafico = st.multiselect("Selecione os Tipos de Oferta para visualizar nos gráficos:", options=opcoes_oferta, default=opcoes_oferta, key="cob_multi")
+    st.markdown("#### Composição das Quebras por UF e SKU")
+    opcoes_quebra = ['Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops']
+    quebras_grafico = st.multiselect("Selecione os Tipos de Quebra para visualizar nos gráficos:", options=opcoes_quebra, default=opcoes_quebra, key="cob_multi")
 
-    if ofertas_grafico:
-        mapa_cores_cobertura = {'Oferta Atual': '#2ecc71', 'Oferta Projetada (ativos)': '#3498db', 'Oferta Projetada (expansão)': '#9b59b6'}
+    if quebras_grafico:
+        mapa_cores_quebra = {'Quebra Atual': '#e74c3c', 'Quebra Projetada': '#e67e22', 'Quebra Projetada c/ pipe Ops': '#f39c12'}
 
-        # 1. COMPOSIÇÃO DE OFERTA POR UF (COLUNAS VERTICAIS EMPILHADAS)
-        df_composicao_uf_cob = df_filtrado.groupby('UF', as_index=False)[ofertas_grafico].sum()
-        df_composicao_uf_cob['UF'] = df_composicao_uf_cob['UF'].astype(str)
-        df_uf_melted_cob = df_composicao_uf_cob.melt(id_vars=['UF'], value_vars=ofertas_grafico, var_name='Tipo de Oferta', value_name='Valor')
+        # 1. COMPOSIÇÃO DE QUEBRA POR UF (COLUNAS VERTICAIS EMPILHADAS)
+        df_composicao_uf_quebra = df_filtrado.groupby('UF', as_index=False)[quebras_grafico].sum()
+        df_composicao_uf_quebra['UF'] = df_composicao_uf_quebra['UF'].astype(str)
+        df_uf_melted_quebra = df_composicao_uf_quebra.melt(id_vars=['UF'], value_vars=quebras_grafico, var_name='Tipo de Quebra', value_name='Valor')
 
-        fig_comp_uf_cob = px.bar(
-            df_uf_melted_cob, x='UF', y='Valor', color='Tipo de Oferta',
-            title="Composição da Oferta por UF", color_discrete_map=mapa_cores_cobertura, barmode='stack'
+        fig_comp_uf_quebra = px.bar(
+            df_uf_melted_quebra, x='UF', y='Valor', color='Tipo de Quebra',
+            title="Composição da Quebra por UF", color_discrete_map=mapa_cores_quebra, barmode='stack'
         )
-        fig_comp_uf_cob.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
-        fig_comp_uf_cob.update_layout(separators=".,", yaxis_tickformat=",.0f", xaxis={'type': 'category', 'categoryorder': 'total descending'})
-        st.plotly_chart(fig_comp_uf_cob, use_container_width=True)
+        fig_comp_uf_quebra.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
+        fig_comp_uf_quebra.update_layout(separators=".,", yaxis_tickformat=",.0f", xaxis={'type': 'category', 'categoryorder': 'total ascending'})
+        st.plotly_chart(fig_comp_uf_quebra, use_container_width=True)
 
-        # 2. COMPOSIÇÃO DE OFERTA POR SKU (BARRAS HORIZONTAIS EMPILHADAS TOP 20 + DEMAIS SKUS)
-        df_composicao_sku_cob = df_filtrado.groupby('SKU', as_index=False)[ofertas_grafico + ['Oferta Total']].sum()
-        df_composicao_sku_cob = df_composicao_sku_cob.sort_values(by='Oferta Total', ascending=False)
+        # 2. COMPOSIÇÃO DE QUEBRA POR SKU (BARRAS HORIZONTAIS EMPILHADAS TOP 20 + DEMAIS SKUS)
+        df_composicao_sku_quebra = df_filtrado.groupby('SKU', as_index=False)[quebras_grafico].sum()
+        df_composicao_sku_quebra['Total_Quebra'] = df_composicao_sku_quebra[quebras_grafico].sum(axis=1)
+        df_composicao_sku_quebra = df_composicao_sku_quebra.sort_values(by='Total_Quebra', ascending=True) # Menores valores (maiores quebras) no topo
 
-        if len(df_composicao_sku_cob) > 20:
-            df_top20_cob = df_composicao_sku_cob.iloc[:20].copy()
-            df_demais_cob = df_composicao_sku_cob.iloc[20:].copy()
-            dict_demais_cob = {'SKU': 'Demais SKUs', 'Oferta Total': df_demais_cob['Oferta Total'].sum()}
-            for o_col in ofertas_grafico:
-                dict_demais_cob[o_col] = df_demais_cob[o_col].sum()
-            df_final_sku_cob = pd.concat([df_top20_cob, pd.DataFrame([dict_demais_cob])], ignore_index=True)
+        if len(df_composicao_sku_quebra) > 20:
+            df_top20_quebra = df_composicao_sku_quebra.iloc[:20].copy()
+            df_demais_quebra = df_composicao_sku_quebra.iloc[20:].copy()
+            dict_demais_quebra = {'SKU': 'Demais SKUs', 'Total_Quebra': df_demais_quebra['Total_Quebra'].sum()}
+            for q_col in quebras_grafico:
+                dict_demais_quebra[q_col] = df_demais_quebra[q_col].sum()
+            df_final_sku_quebra = pd.concat([df_top20_quebra, pd.DataFrame([dict_demais_quebra])], ignore_index=True)
         else:
-            df_final_sku_cob = df_composicao_sku_cob.copy()
+            df_final_sku_quebra = df_composicao_sku_quebra.copy()
 
-        df_final_sku_cob['SKU'] = df_final_sku_cob['SKU'].astype(str)
-        ordem_y_cob = df_final_sku_cob['SKU'].tolist()[::-1]
-        df_sku_melted_cob = df_final_sku_cob.melt(id_vars=['SKU'], value_vars=ofertas_grafico, var_name='Tipo de Oferta', value_name='Valor')
+        df_final_sku_quebra['SKU'] = df_final_sku_quebra['SKU'].astype(str)
+        ordem_y_quebra = df_final_sku_quebra['SKU'].tolist()[::-1]
+        df_sku_melted_quebra = df_final_sku_quebra.melt(id_vars=['SKU'], value_vars=quebras_grafico, var_name='Tipo de Quebra', value_name='Valor')
 
-        fig_comp_sku_cob = px.bar(
-            df_sku_melted_cob, x='Valor', y='SKU', color='Tipo de Oferta', orientation='h',
-            title="Composição da Oferta por SKU (Top 20 + Demais SKUs)", color_discrete_map=mapa_cores_cobertura, barmode='stack'
+        fig_comp_sku_quebra = px.bar(
+            df_sku_melted_quebra, x='Valor', y='SKU', color='Tipo de Quebra', orientation='h',
+            title="Composição da Quebra por SKU (Top 20 + Demais SKUs)", color_discrete_map=mapa_cores_quebra, barmode='stack'
         )
-        fig_comp_sku_cob.update_traces(hovertemplate="%{data.name}: %{x:,.0f}<extra></extra>")
-        fig_comp_sku_cob.update_layout(
+        fig_comp_sku_quebra.update_traces(hovertemplate="%{data.name}: %{x:,.0f}<extra></extra>")
+        fig_comp_sku_quebra.update_layout(
             separators=".,", xaxis_tickformat=",.0f",
-            yaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': ordem_y_cob}, height=600
+            yaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': ordem_y_quebra}, height=600
         )
-        st.plotly_chart(fig_comp_sku_cob, use_container_width=True)
+        st.plotly_chart(fig_comp_sku_quebra, use_container_width=True)
 
-    # TABELA DETALHADA COBERTURA
-    with st.expander("Ver Dados Detalhados de Cobertura"):
+    # TABELA DETALHADA COBERTURA / QUEBRAS
+    with st.expander("Ver Dados Detalhados de Quebras"):
         df_tabela_cob = df_filtrado.copy()
         
-        # Cálculo de colunas percentuais de cobertura e quebra
-        df_tabela_cob['% Cobertura'] = (df_tabela_cob['Oferta Total'] / df_tabela_cob['Demanda TOTAL']).fillna(0)
+        # Percentual de Quebra referente à Demanda TOTAL
+        df_tabela_cob['% Quebra Atual'] = (df_tabela_cob['Quebra Atual'] / df_tabela_cob['Demanda TOTAL']).fillna(0)
         df_tabela_cob['% Quebra Projetada'] = (df_tabela_cob['Quebra Projetada'] / df_tabela_cob['Demanda TOTAL']).fillna(0)
 
         def formatar_numero_br(v):
@@ -421,7 +423,7 @@ def renderizar_visao_cobertura():
             except: return v
 
         formato_dict_cob = {col: formatar_numero_br for col in COLUNAS_NUMERICAS_COBERTURA if col in df_tabela_cob.columns}
-        formato_dict_cob['% Cobertura'] = formatar_percentual
+        formato_dict_cob['% Quebra Atual'] = formatar_percentual
         formato_dict_cob['% Quebra Projetada'] = formatar_percentual
 
         st.dataframe(df_tabela_cob.style.format(formato_dict_cob), use_container_width=True)
