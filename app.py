@@ -185,30 +185,37 @@ demandas_grafico = st.multiselect(
 if demandas_grafico:
     mapa_cores = {'Compensada': '#2ecc71', 'Em Aberto': '#e74c3c', 'Projetada': '#3498db'}
     
-    # --- GRÁFICO 1: COMPOSIÇÃO POR UF ---
+    # --- GRÁFICO 1: COMPOSIÇÃO POR UF (HORIZONTAL) ---
     df_composicao_uf = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
-    df_composicao_uf['UF'] = df_composicao_uf['UF'].astype(str) # Força o eixo X a ser Texto
+    df_composicao_uf['UF'] = df_composicao_uf['UF'].astype(str)
+    
+    # Transforma colunas em linhas
+    df_uf_melted = df_composicao_uf.melt(id_vars=['UF'], value_vars=demandas_grafico, var_name='Tipo de Demanda', value_name='Valor')
     
     fig_comp_uf = px.bar(
-        df_composicao_uf, 
-        x='UF', 
-        y=demandas_grafico, 
+        df_uf_melted, 
+        x='Valor',            # Agora o Valor vai no eixo X (Horizontal)
+        y='UF',               # UF vai no eixo Y (Vertical - um embaixo do outro)
+        color='Tipo de Demanda', 
+        orientation='h',      # Define explicitamente como gráfico horizontal
         title="Composição da Demanda por UF", 
-        color_discrete_map=mapa_cores
+        color_discrete_map=mapa_cores,
+        barmode='stack'
     )
-    fig_comp_uf.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
+    # Atualiza o hover para pegar o eixo X
+    fig_comp_uf.update_traces(hovertemplate="%{data.name}: %{x:,.0f}<extra></extra>")
     fig_comp_uf.update_layout(
-        barmode='stack', # Força as barras ficarem empilhadas verticalmente
         separators=".,", 
-        yaxis_tickformat=",.0f", 
-        legend_title_text="Tipo de Demanda",
-        xaxis={'type': 'category', 'categoryorder': 'total descending'} # Garante que o Plotly entenda como categorias empilháveis
+        xaxis_tickformat=",.0f", 
+        yaxis={'categoryorder': 'total ascending'}, # O maior total fica no topo
+        height=500 # Dá um pouco mais de espaço vertical
     )
-    st.plotly_chart(fig_comp_uf, use_container_width=True)
+    st.plotly_chart(fig_comp_uf, use_container_width=True, theme=None) 
 
-    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU ---
+    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU (HORIZONTAL) ---
     df_composicao_sku = df_filtrado.groupby('SKU', as_index=False)[opcoes_demanda].sum()
     df_composicao_sku['Total_Selecionado'] = df_composicao_sku[demandas_grafico].sum(axis=1)
+    # Ordena do maior para o menor para separar os Tops
     df_composicao_sku = df_composicao_sku.sort_values(by='Total_Selecionado', ascending=False)
     
     if len(df_composicao_sku) > 20:
@@ -224,25 +231,33 @@ if demandas_grafico:
     else:
         df_final_sku = df_composicao_sku.copy()
 
-    # Força a coluna SKU a ser apenas Texto (String) antes de gerar o gráfico
     df_final_sku['SKU'] = df_final_sku['SKU'].astype(str)
 
+    # Prepara a ordem do eixo Y (inverte a lista para o #1 ficar no topo do gráfico e 'Demais' no final)
+    ordem_y = df_final_sku['SKU'].tolist()[::-1]
+
+    # Transforma (melt)
+    df_sku_melted = df_final_sku.melt(id_vars=['SKU'], value_vars=demandas_grafico, var_name='Tipo de Demanda', value_name='Valor')
+
     fig_comp_sku = px.bar(
-        df_final_sku, 
-        x='SKU', 
-        y=demandas_grafico, 
+        df_sku_melted, 
+        x='Valor',            # Agora o Valor vai no eixo X (Horizontal)
+        y='SKU',              # SKU vai no eixo Y (Vertical - um embaixo do outro)
+        color='Tipo de Demanda', 
+        orientation='h',      # Define explicitamente como gráfico horizontal
         title="Composição da Demanda por SKU (Top 20 + Demais SKUs)", 
-        color_discrete_map=mapa_cores
+        color_discrete_map=mapa_cores,
+        barmode='stack'
     )
-    fig_comp_sku.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
+    # Atualiza o hover para pegar o eixo X
+    fig_comp_sku.update_traces(hovertemplate="%{data.name}: %{x:,.0f}<extra></extra>")
     fig_comp_sku.update_layout(
-        barmode='stack', # Força as barras ficarem empilhadas verticalmente
         separators=".,", 
-        yaxis_tickformat=",.0f", 
-        legend_title_text="Tipo de Demanda",
-        xaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': df_final_sku['SKU'].tolist()} # Impede o Plotly de criar eixo contínuo
+        xaxis_tickformat=",.0f", 
+        yaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': ordem_y},
+        height=600 # Altura ajustada para caber os 20 SKUs confortavelmente um embaixo do outro
     )
-    st.plotly_chart(fig_comp_sku, use_container_width=True)
+    st.plotly_chart(fig_comp_sku, use_container_width=True, theme=None)
 
 else:
     st.info("Selecione pelo menos um tipo de demanda para exibir os gráficos.")
