@@ -236,7 +236,7 @@ st.sidebar.divider()
 @st.cache_data(ttl=600)
 def carregar_dados_demanda():
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df_raw = conn.read(worksheet="[Demanda] Visão Gerencial", skiprows=4)
+    df_raw = conn.read(worksheet="[DASH] Demanda", skiprows=4)
     
     if 'SKU' in df_raw.columns:
         idx_sku = df_raw.columns.get_loc('SKU')
