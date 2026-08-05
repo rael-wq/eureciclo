@@ -155,7 +155,6 @@ def converter_valor_num(val):
     except ValueError:
         return 0.0
 
-st.sidebar.image(LOGO_EURECICLO_URL, width=170)
 # ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
 # ==========================================
@@ -181,7 +180,8 @@ def check_login():
             st.error(f"❌ Acesso negado: {st.session_state['user_email']} não autorizado.")
             return False
 
-    st.image(LOGO_EURECICLO_URL, width=200)
+    # Exibição do logo acima da seção de login
+    st.image(LOGO_EURECICLO_URL, width=220)
     st.markdown("### 🔒 Acesso Restrito - Portal eureciclo")
     st.markdown("Faça login com sua conta corporativa `@nhecotech.com` para visualizar o dashboard.")
     
@@ -212,17 +212,17 @@ def check_login():
 if not check_login():
     st.stop()
 
-st.sidebar.success(f"Logado como: {st.session_state['user_email']}")
+# ==========================================
+# LOGO E NAVEGAÇÃO NO MENU LATERAL (ESQUERDA)
+# ==========================================
+st.sidebar.image(LOGO_EURECICLO_URL, width=170)
+st.sidebar.markdown("### Gestão de Operações")
+st.sidebar.success(f"Logado como:\n{st.session_state['user_email']}")
+
 if st.sidebar.button("Sair (Logout)"):
     del st.session_state["user_email"]
     st.rerun()
 st.sidebar.divider()
-
-# ==========================================
-# NAVEGAÇÃO NO MENU LATERAL (ESQUERDA)
-# ==========================================
-
-st.sidebar.markdown("### Gestão de Operações")
 
 pagina_selecionada = st.sidebar.radio(
     "Navegação do Dashboard:",
