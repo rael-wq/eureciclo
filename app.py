@@ -196,7 +196,7 @@ if demandas_grafico:
         x='Valor',            
         y='UF',               
         color='Tipo de Demanda', 
-        orientation='h',      
+        orientation='v',      
         title="Composição da Demanda por UF", 
         color_discrete_map=mapa_cores,
         barmode='stack'
