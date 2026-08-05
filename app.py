@@ -154,7 +154,7 @@ col3.metric("% Projetada", f"{perc_projetada * 100:.1f}%")
 st.divider()
 st.subheader("Detalhamento por Item")
 
-# Calculando a representatividade de cada linha (%) sobre a Demanda Total Global
+# Criando as colunas de porcentagem APENAS se as colunas originais existirem na planilha
 if 'Em Aberto' in df.columns:
     df['% do Total (Em Aberto)'] = df['Em Aberto'] / demanda_total if demanda_total > 0 else 0
 if 'Projetada' in df.columns:
@@ -166,17 +166,21 @@ colunas_identificacao = [
     if col not in colunas_demanda and col not in ['% do Total (Em Aberto)', '% do Total (Projetada)']
 ]
 
-# Montando a lista final de colunas a serem exibidas na tabela
+# Montando a lista inicial de colunas a serem exibidas na tabela
 colunas_para_exibir = colunas_identificacao + demandas_selecionadas
 
-# Adiciona as colunas de percentual apenas se a respectiva demanda também foi selecionada no filtro
-if 'Em Aberto' in demandas_selecionadas:
+# Adiciona as colunas de percentual na lista de exibição apenas se a demanda 
+# foi selecionada no filtro E se a coluna de fato foi criada no DataFrame
+if 'Em Aberto' in demandas_selecionadas and '% do Total (Em Aberto)' in df.columns:
     colunas_para_exibir.append('% do Total (Em Aberto)')
-if 'Projetada' in demandas_selecionadas:
+if 'Projetada' in demandas_selecionadas and '% do Total (Projetada)' in df.columns:
     colunas_para_exibir.append('% do Total (Projetada)')
 
-# Filtra o DataFrame final
-df_exibicao = df[colunas_para_exibir]
+# TRAVA DE SEGURANÇA: Limpa a lista mantendo APENAS colunas que realmente existem no df
+colunas_reais_seguras = [col for col in colunas_para_exibir if col in df.columns]
+
+# Filtra o DataFrame final sem gerar erro de KeyError
+df_exibicao = df[colunas_reais_seguras]
 
 # Renderizando a Tabela com formatações
 st.dataframe(
