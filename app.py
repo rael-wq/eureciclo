@@ -99,7 +99,7 @@ if st.sidebar.button("Sair (Logout)"):
     del st.session_state["user_email"]
     st.rerun()
 
-
+st.sidebar.divider()
 # ==========================================
 # NAVEGAÇÃO ENTRE PÁGINAS NO MENU LATERAL
 # ==========================================
