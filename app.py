@@ -218,7 +218,14 @@ if demandas_grafico:
         color_discrete_map=mapa_cores
     )
     fig_comp.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
-    fig_comp.update_layout(separators=".,", yaxis_tickformat=",.0f", legend_title_text="Tipo de Demanda")
+    
+    # === AQUI ESTÁ A ORDENAÇÃO Z-A (categoryorder: 'total descending') ===
+    fig_comp.update_layout(
+        separators=".,", 
+        yaxis_tickformat=",.0f", 
+        legend_title_text="Tipo de Demanda",
+        xaxis={'categoryorder': 'total descending'} 
+    )
     st.plotly_chart(fig_comp, use_container_width=True)
 else:
     st.info("Selecione pelo menos um tipo de demanda para exibir o gráfico.")
@@ -255,7 +262,7 @@ with st.expander("Ver Dados Detalhados"):
     formato_dict['% Em Aberto'] = formatar_percentual
     formato_dict['% Projetada'] = formatar_percentual
     
-    # Ordenando colunas para que as % fiquem fáceis de visualizar no final (opcional, mas ajuda na leitura)
+    # Ordenando colunas para que as % fiquem fáceis de visualizar no final
     colunas_exibicao = [c for c in df_tabela.columns if not c.startswith('%')] + ['% Compensada', '% Em Aberto', '% Projetada']
     df_tabela = df_tabela[colunas_exibicao]
     
