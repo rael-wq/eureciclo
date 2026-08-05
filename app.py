@@ -65,7 +65,6 @@ try:
 except Exception as e:
     st.error("Erro ao validar credenciais. Faça login novamente.")
     st.stop()
-
 # ==========================================
 # 3. CONEXÃO E LEITURA DE DADOS (GOOGLE SHEETS)
 # ==========================================
@@ -74,16 +73,23 @@ def carregar_dados():
     conn = st.connection("gsheets", type=GSheetsConnection)
     
     # FATIAMENTO CIRÚRGICO DA PLANILHA:
-    # skiprows=3 -> Ignora as linhas 1, 2 e 3 (cabeçalho sujo)
-    # usecols=list(range(11, 21)) -> Pega apenas da coluna 12 (SKU) até a 21 (DEMANDA TOTAL)
+    # skiprows=4 -> Pula as 4 primeiras linhas (lê a 5ª linha como cabeçalho)
+    # usecols=list(range(11, 21)) -> Pega da coluna 12 (SKU) até a 21
     df = conn.read(
         worksheet="[Demanda] Visão Gerencial", 
-        skiprows=3, 
+        skiprows=4, 
         usecols=list(range(11, 21))
     )
     
-    # Remove linhas vazias no final da planilha (se a coluna SKU estiver nula, a linha não serve)
-    df = df.dropna(subset=['SKU'])
+    # Remove espaços em branco invisíveis do nome das colunas (ex: 'SKU ' vira 'SKU')
+    df.columns = df.columns.str.strip()
+    
+    # Remove linhas onde o SKU está vazio (limpa as linhas em branco do final da tabela)
+    if 'SKU' in df.columns:
+        df = df.dropna(subset=['SKU'])
+    else:
+        st.error("Erro Crítico: A coluna 'SKU' não foi encontrada. Verifique o número de linhas vazias no topo da planilha.")
+        st.stop()
     
     colunas_demanda = ["Compensada", "Em Aberto", "Projetada"]
     
@@ -97,7 +103,6 @@ def carregar_dados():
     return df
 
 df = carregar_dados()
-
 # ==========================================
 # 4. BARRA LATERAL (FILTROS E CONTROLES)
 # ==========================================
