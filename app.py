@@ -187,28 +187,24 @@ if demandas_grafico:
     
     # --- GRÁFICO 1: COMPOSIÇÃO POR UF ---
     df_composicao_uf = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
-    df_composicao_uf['UF'] = df_composicao_uf['UF'].astype(str)
-    
-    # MELT: Transforma colunas em linhas para o Plotly empilhar de forma nativa
-    df_uf_melted = df_composicao_uf.melt(id_vars=['UF'], value_vars=demandas_grafico, var_name='Tipo de Demanda', value_name='Valor')
+    df_composicao_uf['UF'] = df_composicao_uf['UF'].astype(str) # Força o eixo X a ser Texto
     
     fig_comp_uf = px.bar(
-        df_uf_melted, 
+        df_composicao_uf, 
         x='UF', 
-        y='Valor', 
-        color='Tipo de Demanda', # Define a quebra vertical
+        y=demandas_grafico, 
         title="Composição da Demanda por UF", 
-        color_discrete_map=mapa_cores,
-        barmode='stack' # Comando direto no construtor
+        color_discrete_map=mapa_cores
     )
     fig_comp_uf.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
     fig_comp_uf.update_layout(
+        barmode='stack', # Força as barras ficarem empilhadas verticalmente
         separators=".,", 
         yaxis_tickformat=",.0f", 
-        xaxis={'type': 'category', 'categoryorder': 'total descending'}
+        legend_title_text="Tipo de Demanda",
+        xaxis={'type': 'category', 'categoryorder': 'total descending'} # Garante que o Plotly entenda como categorias empilháveis
     )
-    # ATENÇÃO AQUI: theme=None bloqueia o Streamlit de alterar o empilhamento
-    st.plotly_chart(fig_comp_uf, use_container_width=True, theme=None) 
+    st.plotly_chart(fig_comp_uf, use_container_width=True)
 
     # --- GRÁFICO 2: COMPOSIÇÃO POR SKU ---
     df_composicao_sku = df_filtrado.groupby('SKU', as_index=False)[opcoes_demanda].sum()
@@ -228,28 +224,25 @@ if demandas_grafico:
     else:
         df_final_sku = df_composicao_sku.copy()
 
+    # Força a coluna SKU a ser apenas Texto (String) antes de gerar o gráfico
     df_final_sku['SKU'] = df_final_sku['SKU'].astype(str)
 
-    # MELT: Preparação perfeita para empilhamento vertical
-    df_sku_melted = df_final_sku.melt(id_vars=['SKU'], value_vars=demandas_grafico, var_name='Tipo de Demanda', value_name='Valor')
-
     fig_comp_sku = px.bar(
-        df_sku_melted, 
+        df_final_sku, 
         x='SKU', 
-        y='Valor', 
-        color='Tipo de Demanda', 
+        y=demandas_grafico, 
         title="Composição da Demanda por SKU (Top 20 + Demais SKUs)", 
-        color_discrete_map=mapa_cores,
-        barmode='stack' # Comando direto no construtor
+        color_discrete_map=mapa_cores
     )
     fig_comp_sku.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
     fig_comp_sku.update_layout(
+        barmode='stack', # Força as barras ficarem empilhadas verticalmente
         separators=".,", 
         yaxis_tickformat=",.0f", 
-        xaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': df_final_sku['SKU'].tolist()}
+        legend_title_text="Tipo de Demanda",
+        xaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': df_final_sku['SKU'].tolist()} # Impede o Plotly de criar eixo contínuo
     )
-    # ATENÇÃO AQUI: theme=None bloqueia o Streamlit de alterar o empilhamento
-    st.plotly_chart(fig_comp_sku, use_container_width=True, theme=None)
+    st.plotly_chart(fig_comp_sku, use_container_width=True)
 
 else:
     st.info("Selecione pelo menos um tipo de demanda para exibir os gráficos.")
