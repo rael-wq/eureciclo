@@ -6,7 +6,7 @@ from streamlit_oauth import OAuth2Component
 from streamlit_gsheets import GSheetsConnection
 
 # ==========================================
-# CONFIGURAÇÃO GERAL E TEMA EURECICLO (LIGHT)
+# CONFIGURAÇÃO GERAL E TEMA INSTITUCIONAL EURECICLO
 # ==========================================
 st.set_page_config(
     page_title="Dashboard Executivo - eureciclo", 
@@ -15,79 +15,123 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilização CSS para forçar Tema Light e Identidade eureciclo
+# Estilização CSS inspirada no portal principal da eureciclo (eureciclo.com.br)
+# Paleta de cores:
+# - Verde Primário: #00A859
+# - Verde Escuro (Acentos): #007A40
+# - Azul Secundário: #0B3C5D / #0284C7
+# - Background Claro: #FAFAFA / #FFFFFF
+# - Texto Primário: #2D3748
+# - Fontes: 'Montserrat', 'Inter', sans-serif
 st.markdown("""
     <style>
-    /* Forçar Tema Light em toda a aplicação */
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+    /* Forçar Tema Light Institucional */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        background-color: #FFFFFF !important;
-        color: #1E293B !important;
+        background-color: #FAFAFA !important;
+        color: #2D3748 !important;
+        font-family: 'Inter', sans-serif !important;
         color-scheme: light !important;
     }
     
-    /* Cores Institucionais eureciclo */
-    :root {
-        --eureciclo-green: #00A859;
-        --eureciclo-dark-green: #007A40;
-        --eureciclo-light-bg: #F8FAF8;
-        --eureciclo-dark: #1E293B;
-        --eureciclo-coral: #FF5A5F;
-        --eureciclo-blue: #0284C7;
+    /* Fontes e Títulos do Portal eureciclo */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Montserrat', sans-serif !important;
+        color: #0B3C5D !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.3px;
     }
-    
-    /* Fontes e Títulos */
-    h1, h2, h3, h4, h5, h6, label, span {
-        color: #1E293B !important;
-        font-family: 'Open Sans', 'Segoe UI', sans-serif;
+
+    h1 {
+        font-size: 1.8rem !important;
+        margin-bottom: 0.5rem !important;
     }
-    
-    /* Ajustes na Barra Lateral */
+
+    h2, h3 {
+        font-size: 1.3rem !important;
+        margin-top: 1rem !important;
+    }
+
+    /* Barra Lateral Ajustada */
     [data-testid="stSidebar"] {
-        background-color: #F8FAFC !important;
-        border-right: 1px solid #E2E8F0;
+        background-color: #FFFFFF !important;
+        border-right: 1px solid #E2E8F0 !important;
     }
-    
-    /* Métricas / Cards */
+
+    /* Cards de Métricas (KPIs) */
+    [data-testid="stMetric"] {
+        background-color: #FFFFFF !important;
+        padding: 12px 16px !important;
+        border-radius: 12px !important;
+        border: 1px solid #E2E8F0 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03) !important;
+    }
+
+    [data-testid="stMetricLabel"] {
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 600 !important;
+        color: #4A5568 !important;
+        font-size: 0.85rem !important;
+    }
+
     [data-testid="stMetricValue"] {
         color: #00A859 !important;
-        font-weight: 700;
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 1.6rem !important;
     }
-    
-    /* Botões Customizados */
+
+    /* Botões Institucionais */
     .stButton>button {
         background-color: #00A859 !important;
         color: #FFFFFF !important;
         border-radius: 8px !important;
         border: none !important;
+        font-family: 'Montserrat', sans-serif !important;
         font-weight: 600 !important;
-        transition: all 0.3s ease;
+        padding: 8px 16px !important;
+        transition: all 0.2s ease-in-out;
     }
+
     .stButton>button:hover {
         background-color: #007A40 !important;
-        box-shadow: 0 4px 12px rgba(0, 168, 89, 0.25);
+        box-shadow: 0 4px 12px rgba(0, 168, 89, 0.3) !important;
+    }
+
+    /* Dividers */
+    hr {
+        border-top: 1px solid #E2E8F0 !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
 COLUNAS_NUMERICAS_DEMANDA = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
 
+# Colunas numéricas da aba Cobertura (sem colunas de Oferta para exibição limpa)
+COLUNAS_EXIBICAO_COBERTURA = [
+    'UF', 'material', 'SKU', 'Ano Base',
+    'Demanda Atual', 'Demanda Projetada', 'Demanda TOTAL', 
+    'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops'
+]
+
 COLUNAS_NUMERICAS_COBERTURA = [
     'Demanda Atual', 'Demanda Projetada', 'Demanda TOTAL', 
     'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops'
 ]
 
-# Paleta de Cores eureciclo para Gráficos
+# Paleta de Cores do Portal eureciclo
 PALETA_EURECICLO = {
     'Compensada': '#00A859',        # Verde eureciclo
-    'Em Aberto': '#FF5A5F',         # Coral / Alerta
+    'Em Aberto': '#FF5A5F',         # Coral
     'Projetada': '#0284C7',         # Azul Oceano
-    'Quebra Atual': '#EF4444',      # Vermelho Alerta
-    'Quebra Projetada': '#F97316',  # Laranja
-    'Quebra Projetada c/ pipe Ops': '#EAB308', # Amarelo/Âmbar
-    'Verde_Escala': ['#E6F7ED', '#99E0B9', '#33C47F', '#00A859', '#007A40']
+    'Quebra Atual': '#E53E3E',      # Vermelho Alerta
+    'Quebra Projetada': '#DD6B20',  # Laranja Institucional
+    'Quebra Projetada c/ pipe Ops': '#D69E2E', # Âmbar
+    'Verde_Escala': ['#E6F4EA', '#A3E0BF', '#42C785', '#00A859', '#007A40']
 }
 
-# URL do Logo Oficial eureciclo
+# Logo Oficial eureciclo
 LOGO_EURECICLO_URL = "https://pages.greatpages.com.br/lp.bowe.com.br-lp-eu-logistica/1782305795/imagens/desktop/3604298_1_17823057706a3bd3ea90543409291793.svg"
 
 # ==========================================
@@ -111,17 +155,6 @@ def converter_valor_num(val):
     except ValueError:
         return 0.0
 
-# ==========================================
-# LOGO E NAVEGAÇÃO NO MENU LATERAL (ESQUERDA)
-# ==========================================
-st.sidebar.image(LOGO_EURECICLO_URL, width=180)
-st.sidebar.markdown("### Gestão de Operações")
-
-pagina_selecionada = st.sidebar.radio(
-    "Navegação do Dashboard:",
-    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura"]
-)
-st.sidebar.divider()
 
 # ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
@@ -183,6 +216,19 @@ st.sidebar.success(f"Logado como: {st.session_state['user_email']}")
 if st.sidebar.button("Sair (Logout)"):
     del st.session_state["user_email"]
     st.rerun()
+st.sidebar.divider()
+
+# ==========================================
+# LOGO E NAVEGAÇÃO NO MENU LATERAL (ESQUERDA)
+# ==========================================
+st.sidebar.image(LOGO_EURECICLO_URL, width=170)
+st.sidebar.markdown("### Gestão de Operações")
+
+pagina_selecionada = st.sidebar.radio(
+    "Navegação do Dashboard:",
+    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura"]
+)
+st.sidebar.divider()
 
 # ==========================================
 # CARREGAMENTO DOS DADOS (CACHE DE 10 MIN)
@@ -287,7 +333,7 @@ def renderizar_visao_demanda():
             color_continuous_scale=PALETA_EURECICLO['Verde_Escala']
         )
         fig_uf.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
-        fig_uf.update_layout(separators=".,", yaxis_tickformat=",.0f", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        fig_uf.update_layout(separators=".,", yaxis_tickformat=",.0f", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(family="Inter, sans-serif"))
         st.plotly_chart(fig_uf, use_container_width=True)
 
     with col_graf2:
@@ -295,10 +341,10 @@ def renderizar_visao_demanda():
         fig_mat = px.pie(
             df_mat, values='DEMANDA TOTAL', names='material', 
             title="Distribuição da Demanda por Material", hole=0.4,
-            color_discrete_sequence=['#00A859', '#0284C7', '#FF5A5F', '#EAB308']
+            color_discrete_sequence=['#00A859', '#0284C7', '#FF5A5F', '#DD6B20']
         )
         fig_mat.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="%{label}: %{value:,.0f}<extra></extra>")
-        fig_mat.update_layout(separators=".,", paper_bgcolor="rgba(0,0,0,0)")
+        fig_mat.update_layout(separators=".,", paper_bgcolor="rgba(0,0,0,0)", font=dict(family="Inter, sans-serif"))
         st.plotly_chart(fig_mat, use_container_width=True)
 
     st.markdown("#### Composição do Estoque (Visão por UF e SKU)")
@@ -325,7 +371,8 @@ def renderizar_visao_demanda():
         fig_comp_uf.update_layout(
             separators=".,", yaxis_tickformat=",.0f", 
             xaxis={'type': 'category', 'categoryorder': 'total descending'},
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Inter, sans-serif")
         )
         st.plotly_chart(fig_comp_uf, use_container_width=True)
 
@@ -356,7 +403,8 @@ def renderizar_visao_demanda():
         fig_comp_sku.update_layout(
             separators=".,", xaxis_tickformat=",.0f",
             yaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': ordem_y}, height=600,
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Inter, sans-serif")
         )
         st.plotly_chart(fig_comp_sku, use_container_width=True)
 
@@ -458,10 +506,10 @@ def renderizar_visao_cobertura():
             df_uf_quebra, x='UF', y='Quebra Projetada', 
             title="Quebra Projetada por UF", 
             color='Quebra Projetada', 
-            color_continuous_scale=['#EF4444', '#F97316', '#FEF08A']
+            color_continuous_scale=['#E53E3E', '#DD6B20', '#ECC94B']
         )
         fig_uf_quebra.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
-        fig_uf_quebra.update_layout(separators=".,", yaxis_tickformat=",.0f", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        fig_uf_quebra.update_layout(separators=".,", yaxis_tickformat=",.0f", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(family="Inter, sans-serif"))
         st.plotly_chart(fig_uf_quebra, use_container_width=True)
 
     with col_g2:
@@ -470,10 +518,10 @@ def renderizar_visao_cobertura():
         fig_mat_quebra = px.pie(
             df_mat_quebra, values='Abs_Quebra', names='material', 
             title="Distribuição da Quebra Projetada por Material", hole=0.4,
-            color_discrete_sequence=['#EF4444', '#F97316', '#EAB308', '#0284C7']
+            color_discrete_sequence=['#E53E3E', '#DD6B20', '#D69E2E', '#0284C7']
         )
         fig_mat_quebra.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="%{label}: %{value:,.0f}<extra></extra>")
-        fig_mat_quebra.update_layout(separators=".,", paper_bgcolor="rgba(0,0,0,0)")
+        fig_mat_quebra.update_layout(separators=".,", paper_bgcolor="rgba(0,0,0,0)", font=dict(family="Inter, sans-serif"))
         st.plotly_chart(fig_mat_quebra, use_container_width=True)
 
     st.markdown("#### Composição das Quebras por UF e SKU")
@@ -500,7 +548,8 @@ def renderizar_visao_cobertura():
         fig_comp_uf_quebra.update_layout(
             separators=".,", yaxis_tickformat=",.0f", 
             xaxis={'type': 'category', 'categoryorder': 'total ascending'},
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Inter, sans-serif")
         )
         st.plotly_chart(fig_comp_uf_quebra, use_container_width=True)
 
@@ -531,13 +580,15 @@ def renderizar_visao_cobertura():
         fig_comp_sku_quebra.update_layout(
             separators=".,", xaxis_tickformat=",.0f",
             yaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': ordem_y_quebra}, height=600,
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Inter, sans-serif")
         )
         st.plotly_chart(fig_comp_sku_quebra, use_container_width=True)
 
-    # TABELA DETALHADA COBERTURA / QUEBRAS
+    # TABELA DETALHADA COBERTURA / QUEBRAS (SEM COLUNAS DE OFERTA)
     with st.expander("Ver Dados Detalhados de Quebras"):
-        df_tabela_cob = df_filtrado.copy()
+        cols_presentes = [c for c in COLUNAS_EXIBICAO_COBERTURA if c in df_filtrado.columns]
+        df_tabela_cob = df_filtrado[cols_presentes].copy()
 
         def formatar_numero_br(v):
             try: return f"{v:,.0f}".replace(",", ".")
