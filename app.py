@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go  # NOVO: Importação para controle absoluto dos gráficos
 import requests
 from streamlit_oauth import OAuth2Component
 from streamlit_gsheets import GSheetsConnection
@@ -186,30 +185,28 @@ demandas_grafico = st.multiselect(
 if demandas_grafico:
     mapa_cores = {'Compensada': '#2ecc71', 'Em Aberto': '#e74c3c', 'Projetada': '#3498db'}
     
-    # --- GRÁFICO 1: COMPOSIÇÃO POR UF (Garantindo Empilhamento Vertical Absoluto) ---
+    # --- GRÁFICO 1: COMPOSIÇÃO POR UF ---
     df_composicao_uf = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
+    df_composicao_uf['UF'] = df_composicao_uf['UF'].astype(str) # Força o eixo X a ser Texto
     
-    fig_comp_uf = go.Figure()
-    for demanda in demandas_grafico:
-        fig_comp_uf.add_trace(go.Bar(
-            x=df_composicao_uf['UF'],
-            y=df_composicao_uf[demanda],
-            name=demanda,
-            marker_color=mapa_cores[demanda],
-            hovertemplate="%{y:,.0f}<extra></extra>"
-        ))
-        
-    fig_comp_uf.update_layout(
+    fig_comp_uf = px.bar(
+        df_composicao_uf, 
+        x='UF', 
+        y=demandas_grafico, 
         title="Composição da Demanda por UF", 
-        barmode='stack', # Empilhamento forçado verticalmente
+        color_discrete_map=mapa_cores
+    )
+    fig_comp_uf.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
+    fig_comp_uf.update_layout(
+        barmode='stack', # Força as barras ficarem empilhadas verticalmente
         separators=".,", 
         yaxis_tickformat=",.0f", 
         legend_title_text="Tipo de Demanda",
-        xaxis={'categoryorder': 'total descending'} 
+        xaxis={'type': 'category', 'categoryorder': 'total descending'} # Garante que o Plotly entenda como categorias empilháveis
     )
     st.plotly_chart(fig_comp_uf, use_container_width=True)
 
-    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU (Garantindo Empilhamento Vertical Absoluto) ---
+    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU ---
     df_composicao_sku = df_filtrado.groupby('SKU', as_index=False)[opcoes_demanda].sum()
     df_composicao_sku['Total_Selecionado'] = df_composicao_sku[demandas_grafico].sum(axis=1)
     df_composicao_sku = df_composicao_sku.sort_values(by='Total_Selecionado', ascending=False)
@@ -227,23 +224,23 @@ if demandas_grafico:
     else:
         df_final_sku = df_composicao_sku.copy()
 
-    fig_comp_sku = go.Figure()
-    for demanda in demandas_grafico:
-        fig_comp_sku.add_trace(go.Bar(
-            x=df_final_sku['SKU'],
-            y=df_final_sku[demanda],
-            name=demanda,
-            marker_color=mapa_cores[demanda],
-            hovertemplate="%{y:,.0f}<extra></extra>"
-        ))
+    # Força a coluna SKU a ser apenas Texto (String) antes de gerar o gráfico
+    df_final_sku['SKU'] = df_final_sku['SKU'].astype(str)
 
-    fig_comp_sku.update_layout(
+    fig_comp_sku = px.bar(
+        df_final_sku, 
+        x='SKU', 
+        y=demandas_grafico, 
         title="Composição da Demanda por SKU (Top 20 + Demais SKUs)", 
-        barmode='stack', # Empilhamento forçado verticalmente
+        color_discrete_map=mapa_cores
+    )
+    fig_comp_sku.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
+    fig_comp_sku.update_layout(
+        barmode='stack', # Força as barras ficarem empilhadas verticalmente
         separators=".,", 
         yaxis_tickformat=",.0f", 
         legend_title_text="Tipo de Demanda",
-        xaxis={'categoryorder': 'array', 'categoryarray': df_final_sku['SKU'].tolist()} 
+        xaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': df_final_sku['SKU'].tolist()} # Impede o Plotly de criar eixo contínuo
     )
     st.plotly_chart(fig_comp_sku, use_container_width=True)
 
