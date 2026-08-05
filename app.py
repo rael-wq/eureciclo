@@ -6,14 +6,26 @@ from streamlit_oauth import OAuth2Component
 from streamlit_gsheets import GSheetsConnection
 
 # ==========================================
-# CONFIGURAÇÃO GERAL E TEMA EURECICLO
+# CONFIGURAÇÃO GERAL E TEMA EURECICLO (LIGHT)
 # ==========================================
-st.set_page_config(page_title="Dashboard Executivo - eureciclo", layout="wide", page_icon="♻️")
+st.set_page_config(
+    page_title="Dashboard Executivo - eureciclo", 
+    layout="wide", 
+    page_icon="♻️",
+    initial_sidebar_state="expanded"
+)
 
-# Estilização CSS inspirada no portal eureciclo
+# Estilização CSS para forçar Tema Light e Identidade eureciclo
 st.markdown("""
     <style>
-    /* Estilo Global e Cores eureciclo */
+    /* Forçar Tema Light em toda a aplicação */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        background-color: #FFFFFF !important;
+        color: #1E293B !important;
+        color-scheme: light !important;
+    }
+    
+    /* Cores Institucionais eureciclo */
     :root {
         --eureciclo-green: #00A859;
         --eureciclo-dark-green: #007A40;
@@ -24,15 +36,14 @@ st.markdown("""
     }
     
     /* Fontes e Títulos */
-    h1, h2, h3 {
+    h1, h2, h3, h4, h5, h6, label, span {
         color: #1E293B !important;
         font-family: 'Open Sans', 'Segoe UI', sans-serif;
-        font-weight: 700;
     }
     
     /* Ajustes na Barra Lateral */
     [data-testid="stSidebar"] {
-        background-color: #F1F5F9 !important;
+        background-color: #F8FAFC !important;
         border-right: 1px solid #E2E8F0;
     }
     
@@ -45,7 +56,7 @@ st.markdown("""
     /* Botões Customizados */
     .stButton>button {
         background-color: #00A859 !important;
-        color: white !important;
+        color: #FFFFFF !important;
         border-radius: 8px !important;
         border: none !important;
         font-weight: 600 !important;
@@ -54,11 +65,6 @@ st.markdown("""
     .stButton>button:hover {
         background-color: #007A40 !important;
         box-shadow: 0 4px 12px rgba(0, 168, 89, 0.25);
-    }
-    
-    /* Tabelas */
-    .dataframe {
-        border-radius: 8px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -80,6 +86,9 @@ PALETA_EURECICLO = {
     'Quebra Projetada c/ pipe Ops': '#EAB308', # Amarelo/Âmbar
     'Verde_Escala': ['#E6F7ED', '#99E0B9', '#33C47F', '#00A859', '#007A40']
 }
+
+# URL do Logo Oficial eureciclo
+LOGO_EURECICLO_URL = "https://eureciclo.com.br/wp-content/uploads/2022/03/logo-eureciclo.svg"
 
 # ==========================================
 # FUNÇÃO AUXILIAR DE TRATAMENTO NUMÉRICO
@@ -103,9 +112,11 @@ def converter_valor_num(val):
         return 0.0
 
 # ==========================================
-# NAVEGAÇÃO ENTRE PÁGINAS NO MENU LATERAL
+# LOGO E NAVEGAÇÃO NO MENU LATERAL (ESQUERDA)
 # ==========================================
-st.sidebar.markdown("## ♻️ eureciclo")
+st.sidebar.image(LOGO_EURECICLO_URL, width=180)
+st.sidebar.markdown("### Gestão de Operações")
+
 pagina_selecionada = st.sidebar.radio(
     "Navegação do Dashboard:",
     ["📊 Visão de Demanda", "🛡️ Visão de Cobertura"]
@@ -137,6 +148,7 @@ def check_login():
             st.error(f"❌ Acesso negado: {st.session_state['user_email']} não autorizado.")
             return False
 
+    st.image(LOGO_EURECICLO_URL, width=200)
     st.markdown("### 🔒 Acesso Restrito - Portal eureciclo")
     st.markdown("Faça login com sua conta corporativa `@nhecotech.com` para visualizar o dashboard.")
     
