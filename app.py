@@ -131,6 +131,13 @@ ano_selecionado = st.sidebar.multiselect("Ano Base", sorted(df['Ano Base'].dropn
 uf_selecionada = st.sidebar.multiselect("Estado (UF)", sorted(df['UF'].dropna().unique()))
 material_selecionado = st.sidebar.multiselect("Material", sorted(df['material'].dropna().unique()))
 
+st.sidebar.divider() # Cria uma linha visual separadora
+
+if st.sidebar.button("🔄 Atualizar Dados"):
+    st.cache_data.clear() # Limpa o cache da memória
+    st.rerun()            # Recarrega a página instantaneamente
+
+
 df_filtrado = df.copy()
 if ano_selecionado:
     df_filtrado = df_filtrado[df_filtrado['Ano Base'].astype(str).isin(ano_selecionado)]
