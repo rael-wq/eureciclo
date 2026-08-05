@@ -153,7 +153,7 @@ total_compensada = df_filtrado['Compensada'].sum() if 'Compensada' in df_filtrad
 total_em_aberto = df_filtrado['Em Aberto'].sum() if 'Em Aberto' in df_filtrado.columns else 0
 total_projetada = df_filtrado['Projetada'].sum() if 'Projetada' in df_filtrado.columns else 0
 
-# Base de cálculo para os percentuais globais (Compensada + Em Aberto + Projetada)
+# Base de cálculo para os percentuais globais
 soma_demanda_calc = total_compensada + total_em_aberto + total_projetada
 
 perc_compensada = (total_compensada / soma_demanda_calc * 100) if soma_demanda_calc > 0 else 0
@@ -191,7 +191,6 @@ with col_graf2:
 
 st.markdown("#### Composição do Estoque (Visão por UF e SKU)")
 
-# Filtro unificado para os dois gráficos de Composição
 opcoes_demanda = ['Compensada', 'Em Aberto', 'Projetada']
 demandas_grafico = st.multiselect(
     "Selecione as Demandas para visualizar nos gráficos abaixo:", 
@@ -200,14 +199,9 @@ demandas_grafico = st.multiselect(
 )
 
 if demandas_grafico:
-    # Mapa de cores fixo
-    mapa_cores = {
-        'Compensada': '#2ecc71', 
-        'Em Aberto': '#e74c3c', 
-        'Projetada': '#3498db'
-    }
+    mapa_cores = {'Compensada': '#2ecc71', 'Em Aberto': '#e74c3c', 'Projetada': '#3498db'}
     
-    # --- GRÁFICO 1: COMPOSIÇÃO POR UF ---
+    # --- GRÁFICO 1: COMPOSIÇÃO POR UF (Barras Empilhadas Z-A) ---
     df_composicao_uf = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
     fig_comp_uf = px.bar(
         df_composicao_uf, 
@@ -226,14 +220,38 @@ if demandas_grafico:
     )
     st.plotly_chart(fig_comp_uf, use_container_width=True)
 
-    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU ---
+    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU (Linhas/Área Empilhadas Top 20) ---
+    # 1. Agrupa por SKU
     df_composicao_sku = df_filtrado.groupby('SKU', as_index=False)[opcoes_demanda].sum()
-    fig_comp_sku = px.bar(
-        df_composicao_sku, 
+    
+    # 2. Cria uma coluna totalizadora baseada no que o usuário selecionou para ordenar
+    df_composicao_sku['Total_Selecionado'] = df_composicao_sku[demandas_grafico].sum(axis=1)
+    
+    # 3. Ordena do maior para o menor
+    df_composicao_sku = df_composicao_sku.sort_values(by='Total_Selecionado', ascending=False)
+    
+    # 4. Lógica do Top 20 + Demais SKUs
+    if len(df_composicao_sku) > 20:
+        df_top20 = df_composicao_sku.iloc[:20].copy()
+        df_demais = df_composicao_sku.iloc[20:].copy()
+        
+        # Cria um dicionário com a soma dos 'Demais SKUs'
+        dict_demais = {'SKU': 'Demais SKUs', 'Total_Selecionado': df_demais['Total_Selecionado'].sum()}
+        for demanda in opcoes_demanda:
+            dict_demais[demanda] = df_demais[demanda].sum()
+            
+        # Adiciona a linha 'Demais SKUs' ao final do Top 20
+        df_demais_row = pd.DataFrame([dict_demais])
+        df_final_sku = pd.concat([df_top20, df_demais_row], ignore_index=True)
+    else:
+        df_final_sku = df_composicao_sku.copy()
+
+    # 5. Gera o gráfico de área empilhada (px.area)
+    fig_comp_sku = px.area(
+        df_final_sku, 
         x='SKU', 
         y=demandas_grafico, 
-        title="Composição da Demanda por SKU", 
-        barmode='stack', 
+        title="Composição da Demanda por SKU (Top 20 + Demais SKUs)", 
         color_discrete_map=mapa_cores
     )
     fig_comp_sku.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
@@ -241,7 +259,8 @@ if demandas_grafico:
         separators=".,", 
         yaxis_tickformat=",.0f", 
         legend_title_text="Tipo de Demanda",
-        xaxis={'categoryorder': 'total descending'} 
+        # Trava a ordem do eixo X exatamente como estruturamos no DataFrame (Top 20 -> Demais)
+        xaxis={'categoryorder': 'array', 'categoryarray': df_final_sku['SKU'].tolist()} 
     )
     st.plotly_chart(fig_comp_sku, use_container_width=True)
 
@@ -254,13 +273,11 @@ else:
 with st.expander("Ver Dados Detalhados"):
     df_tabela = df_filtrado.copy()
     
-    # Calcula os indicadores percentuais linha a linha
     soma_linha = df_tabela['Compensada'] + df_tabela['Em Aberto'] + df_tabela['Projetada']
     df_tabela['% Compensada'] = (df_tabela['Compensada'] / soma_linha).fillna(0)
     df_tabela['% Em Aberto'] = (df_tabela['Em Aberto'] / soma_linha).fillna(0)
     df_tabela['% Projetada'] = (df_tabela['Projetada'] / soma_linha).fillna(0)
     
-    # Funções de formatação do Pandas Styler
     def formatar_numero_br(valor):
         try:
             return f"{valor:,.0f}".replace(",", ".")
@@ -273,14 +290,12 @@ with st.expander("Ver Dados Detalhados"):
         except:
             return valor
 
-    # Aplica a formatação
     colunas_presentes = [col for col in COLUNAS_NUMERICAS if col in df_tabela.columns]
     formato_dict = {col: formatar_numero_br for col in colunas_presentes}
     formato_dict['% Compensada'] = formatar_percentual
     formato_dict['% Em Aberto'] = formatar_percentual
     formato_dict['% Projetada'] = formatar_percentual
     
-    # Ordenando colunas para que as % fiquem fáceis de visualizar no final
     colunas_exibicao = [c for c in df_tabela.columns if not c.startswith('%')] + ['% Compensada', '% Em Aberto', '% Projetada']
     df_tabela = df_tabela[colunas_exibicao]
     
