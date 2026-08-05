@@ -189,33 +189,30 @@ if demandas_grafico:
     df_composicao_uf = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
     df_composicao_uf['UF'] = df_composicao_uf['UF'].astype(str)
     
-    # Transforma colunas em linhas
     df_uf_melted = df_composicao_uf.melt(id_vars=['UF'], value_vars=demandas_grafico, var_name='Tipo de Demanda', value_name='Valor')
     
     fig_comp_uf = px.bar(
         df_uf_melted, 
-        x='Valor',            # Agora o Valor vai no eixo X (Horizontal)
-        y='UF',               # UF vai no eixo Y (Vertical - um embaixo do outro)
+        x='Valor',            
+        y='UF',               
         color='Tipo de Demanda', 
-        orientation='h',      # Define explicitamente como gráfico horizontal
+        orientation='h',      
         title="Composição da Demanda por UF", 
         color_discrete_map=mapa_cores,
         barmode='stack'
     )
-    # Atualiza o hover para pegar o eixo X
     fig_comp_uf.update_traces(hovertemplate="%{data.name}: %{x:,.0f}<extra></extra>")
     fig_comp_uf.update_layout(
         separators=".,", 
         xaxis_tickformat=",.0f", 
-        yaxis={'categoryorder': 'total ascending'}, # O maior total fica no topo
-        height=500 # Dá um pouco mais de espaço vertical
+        yaxis={'categoryorder': 'total ascending'},
+        height=500
     )
-    st.plotly_chart(fig_comp_uf, use_container_width=True, theme=None) 
+    st.plotly_chart(fig_comp_uf, use_container_width=True) # Formatação padrão do Streamlit mantida
 
     # --- GRÁFICO 2: COMPOSIÇÃO POR SKU (HORIZONTAL) ---
     df_composicao_sku = df_filtrado.groupby('SKU', as_index=False)[opcoes_demanda].sum()
     df_composicao_sku['Total_Selecionado'] = df_composicao_sku[demandas_grafico].sum(axis=1)
-    # Ordena do maior para o menor para separar os Tops
     df_composicao_sku = df_composicao_sku.sort_values(by='Total_Selecionado', ascending=False)
     
     if len(df_composicao_sku) > 20:
@@ -232,32 +229,28 @@ if demandas_grafico:
         df_final_sku = df_composicao_sku.copy()
 
     df_final_sku['SKU'] = df_final_sku['SKU'].astype(str)
-
-    # Prepara a ordem do eixo Y (inverte a lista para o #1 ficar no topo do gráfico e 'Demais' no final)
     ordem_y = df_final_sku['SKU'].tolist()[::-1]
 
-    # Transforma (melt)
     df_sku_melted = df_final_sku.melt(id_vars=['SKU'], value_vars=demandas_grafico, var_name='Tipo de Demanda', value_name='Valor')
 
     fig_comp_sku = px.bar(
         df_sku_melted, 
-        x='Valor',            # Agora o Valor vai no eixo X (Horizontal)
-        y='SKU',              # SKU vai no eixo Y (Vertical - um embaixo do outro)
+        x='Valor',            
+        y='SKU',              
         color='Tipo de Demanda', 
-        orientation='h',      # Define explicitamente como gráfico horizontal
+        orientation='h',      
         title="Composição da Demanda por SKU (Top 20 + Demais SKUs)", 
         color_discrete_map=mapa_cores,
         barmode='stack'
     )
-    # Atualiza o hover para pegar o eixo X
     fig_comp_sku.update_traces(hovertemplate="%{data.name}: %{x:,.0f}<extra></extra>")
     fig_comp_sku.update_layout(
         separators=".,", 
         xaxis_tickformat=",.0f", 
         yaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': ordem_y},
-        height=600 # Altura ajustada para caber os 20 SKUs confortavelmente um embaixo do outro
+        height=600
     )
-    st.plotly_chart(fig_comp_sku, use_container_width=True, theme=None)
+    st.plotly_chart(fig_comp_sku, use_container_width=True) # Formatação padrão do Streamlit mantida
 
 else:
     st.info("Selecione pelo menos um tipo de demanda para exibir os gráficos.")
