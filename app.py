@@ -82,7 +82,7 @@ def carregar_dados_finais():
     # Cria a conexão com o Google Sheets usando as credenciais do Secrets
     conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # Lê a aba "Demanda", pulando as 4 primeiras linhas como fazíamos no CSV
+    # Lê a aba "Demanda", pulando as 4 primeiras linhas
     df_raw = conn.read(worksheet="[Demanda] Visão Gerencial", skiprows=4)
     
     # 2. Isola a tabela detalhada (Começa a partir da coluna SKU)
@@ -129,14 +129,6 @@ st.sidebar.header("Filtros de Análise")
 ano_selecionado = st.sidebar.multiselect("Ano Base", sorted(df['Ano Base'].dropna().astype(str).unique()))
 uf_selecionada = st.sidebar.multiselect("Estado (UF)", sorted(df['UF'].dropna().unique()))
 material_selecionado = st.sidebar.multiselect("Material", sorted(df['material'].dropna().unique()))
-
-st.sidebar.markdown("---")
-# NOVO: Filtro para tipos de Demanda a exibir na tabela
-demandas_selecionadas = st.sidebar.multiselect(
-    "Tipos de Demanda (Tabela)", 
-    ['Compensada', 'Em Aberto', 'Projetada'], 
-    default=['Compensada', 'Em Aberto', 'Projetada']
-)
 
 df_filtrado = df.copy()
 if ano_selecionado:
@@ -197,11 +189,38 @@ with col_graf2:
     st.plotly_chart(fig_mat, use_container_width=True)
 
 st.markdown("#### Composição do Estoque por UF")
-df_composicao = df_filtrado.groupby('UF', as_index=False)[['Compensada', 'Em Aberto', 'Projetada']].sum()
-fig_comp = px.bar(df_composicao, x='UF', y=['Compensada', 'Em Aberto', 'Projetada'], title="Composição da Demanda: Compensada vs Em Aberto vs Projetada", barmode='stack', color_discrete_sequence=['#2ecc71', '#e74c3c', '#3498db'])
-fig_comp.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
-fig_comp.update_layout(separators=".,", yaxis_tickformat=",.0f")
-st.plotly_chart(fig_comp, use_container_width=True)
+
+# Filtro específico para o gráfico de Composição
+opcoes_demanda = ['Compensada', 'Em Aberto', 'Projetada']
+demandas_grafico = st.multiselect(
+    "Selecione as Demandas para visualizar no gráfico:", 
+    options=opcoes_demanda, 
+    default=opcoes_demanda
+)
+
+if demandas_grafico:
+    df_composicao = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
+    
+    # Mapa de cores fixo para garantir que as cores não mudem ao desmarcar uma opção
+    mapa_cores = {
+        'Compensada': '#2ecc71', 
+        'Em Aberto': '#e74c3c', 
+        'Projetada': '#3498db'
+    }
+    
+    fig_comp = px.bar(
+        df_composicao, 
+        x='UF', 
+        y=demandas_grafico, 
+        title="Composição da Demanda", 
+        barmode='stack', 
+        color_discrete_map=mapa_cores
+    )
+    fig_comp.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
+    fig_comp.update_layout(separators=".,", yaxis_tickformat=",.0f", legend_title_text="Tipo de Demanda")
+    st.plotly_chart(fig_comp, use_container_width=True)
+else:
+    st.info("Selecione pelo menos um tipo de demanda para exibir o gráfico.")
 
 # ==========================================
 # TABELA DETALHADA COM %
@@ -209,17 +228,12 @@ st.plotly_chart(fig_comp, use_container_width=True)
 with st.expander("Ver Dados Detalhados"):
     df_tabela = df_filtrado.copy()
     
-    # 1. Calcula os indicadores percentuais linha a linha
+    # Calcula os indicadores percentuais linha a linha
     soma_linha = df_tabela['Compensada'] + df_tabela['Em Aberto'] + df_tabela['Projetada']
     df_tabela['% Em Aberto'] = (df_tabela['Em Aberto'] / soma_linha).fillna(0)
     df_tabela['% Projetada'] = (df_tabela['Projetada'] / soma_linha).fillna(0)
     
-    # 2. Oculta da tabela as colunas de demanda que o usuário desmarcou no filtro lateral
-    todas_demandas = ['Compensada', 'Em Aberto', 'Projetada']
-    colunas_remover = [col for col in todas_demandas if col not in demandas_selecionadas]
-    df_tabela = df_tabela.drop(columns=colunas_remover, errors='ignore')
-    
-    # 3. Funções de formatação do Pandas Styler
+    # Funções de formatação do Pandas Styler
     def formatar_numero_br(valor):
         try:
             return f"{valor:,.0f}".replace(",", ".")
@@ -232,7 +246,7 @@ with st.expander("Ver Dados Detalhados"):
         except:
             return valor
 
-    # 4. Aplica a formatação
+    # Aplica a formatação
     colunas_presentes = [col for col in COLUNAS_NUMERICAS if col in df_tabela.columns]
     formato_dict = {col: formatar_numero_br for col in colunas_presentes}
     formato_dict['% Em Aberto'] = formatar_percentual
