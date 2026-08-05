@@ -156,13 +156,14 @@ total_projetada = df_filtrado['Projetada'].sum() if 'Projetada' in df_filtrado.c
 # Base de cálculo para os percentuais globais (Compensada + Em Aberto + Projetada)
 soma_demanda_calc = total_compensada + total_em_aberto + total_projetada
 
+perc_compensada = (total_compensada / soma_demanda_calc * 100) if soma_demanda_calc > 0 else 0
 perc_em_aberto = (total_em_aberto / soma_demanda_calc * 100) if soma_demanda_calc > 0 else 0
 perc_projetada = (total_projetada / soma_demanda_calc * 100) if soma_demanda_calc > 0 else 0
 
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
 kpi1.metric("Demanda Total (Calculada)", f"{soma_demanda_calc:,.0f}".replace(",", "."))
-kpi2.metric("Compensada", f"{total_compensada:,.0f}".replace(",", "."))
+kpi2.metric("Compensada", f"{total_compensada:,.0f}".replace(",", "."), f"{perc_compensada:.1f}%", delta_color="off")
 kpi3.metric("Em Aberto", f"{total_em_aberto:,.0f}".replace(",", "."), f"{perc_em_aberto:.1f}%", delta_color="off")
 kpi4.metric("Projetada", f"{total_projetada:,.0f}".replace(",", "."), f"{perc_projetada:.1f}%", delta_color="off")
 
@@ -230,6 +231,7 @@ with st.expander("Ver Dados Detalhados"):
     
     # Calcula os indicadores percentuais linha a linha
     soma_linha = df_tabela['Compensada'] + df_tabela['Em Aberto'] + df_tabela['Projetada']
+    df_tabela['% Compensada'] = (df_tabela['Compensada'] / soma_linha).fillna(0)
     df_tabela['% Em Aberto'] = (df_tabela['Em Aberto'] / soma_linha).fillna(0)
     df_tabela['% Projetada'] = (df_tabela['Projetada'] / soma_linha).fillna(0)
     
@@ -249,7 +251,12 @@ with st.expander("Ver Dados Detalhados"):
     # Aplica a formatação
     colunas_presentes = [col for col in COLUNAS_NUMERICAS if col in df_tabela.columns]
     formato_dict = {col: formatar_numero_br for col in colunas_presentes}
+    formato_dict['% Compensada'] = formatar_percentual
     formato_dict['% Em Aberto'] = formatar_percentual
     formato_dict['% Projetada'] = formatar_percentual
+    
+    # Ordenando colunas para que as % fiquem fáceis de visualizar no final (opcional, mas ajuda na leitura)
+    colunas_exibicao = [c for c in df_tabela.columns if not c.startswith('%')] + ['% Compensada', '% Em Aberto', '% Projetada']
+    df_tabela = df_tabela[colunas_exibicao]
     
     st.dataframe(df_tabela.style.format(formato_dict), use_container_width=True)
