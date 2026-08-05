@@ -38,15 +38,6 @@ def converter_valor_num(val):
     except ValueError:
         return 0.0
 
-# ==========================================
-# NAVEGAÇÃO ENTRE PÁGINAS NO MENU LATERAL
-# ==========================================
-st.sidebar.title("📌 Navegação")
-pagina_selecionada = st.sidebar.radio(
-    "Selecione a Visão:",
-    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura"]
-)
-st.sidebar.divider()
 
 # ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
@@ -107,6 +98,17 @@ st.sidebar.success(f"Logado como: {st.session_state['user_email']}")
 if st.sidebar.button("Sair (Logout)"):
     del st.session_state["user_email"]
     st.rerun()
+
+
+# ==========================================
+# NAVEGAÇÃO ENTRE PÁGINAS NO MENU LATERAL
+# ==========================================
+st.sidebar.title("📌 Navegação")
+pagina_selecionada = st.sidebar.radio(
+    "Selecione a Visão:",
+    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura"]
+)
+st.sidebar.divider()
 
 # ==========================================
 # CARREGAMENTO DOS DADOS (CACHE DE 10 MIN)
