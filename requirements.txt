@@ -1,5 +1,7 @@
 streamlit
-streamlit-oauth
+pandas
+plotly
 requests
+streamlit-oauth
 st-gsheets-connection
 starlette<0.37.0
