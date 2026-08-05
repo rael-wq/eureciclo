@@ -12,6 +12,33 @@ st.set_page_config(page_title="Dashboard Executivo - Operações", layout="wide"
 
 COLUNAS_NUMERICAS_DEMANDA = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
 
+COLUNAS_NUMERICAS_COBERTURA = [
+    'Demanda Atual', 'Demanda Projetada', 'Demanda TOTAL', 
+    'Oferta Atual', 'Oferta Projetada (ativos)', 'Oferta Projetada (expansão)', 
+    'Oferta Total', 'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops'
+]
+
+# ==========================================
+# FUNÇÃO AUXILIAR DE TRATAMENTO NUMÉRICO
+# ==========================================
+def converter_valor_num(val):
+    if pd.isna(val):
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).strip()
+    if not s or s.lower() == 'nan':
+        return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        pass
+    try:
+        s_clean = s.replace('.', '').replace(',', '.')
+        return float(s_clean)
+    except ValueError:
+        return 0.0
+
 # ==========================================
 # NAVEGAÇÃO ENTRE PÁGINAS NO MENU LATERAL
 # ==========================================
@@ -101,42 +128,26 @@ def carregar_dados_demanda():
     
     for col in COLUNAS_NUMERICAS_DEMANDA:
         if col in df.columns:
-            if pd.api.types.is_numeric_dtype(df[col]):
-                df[col] = df[col].fillna(0)
-            else:
-                df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            df[col] = df[col].apply(converter_valor_num)
             
     return df
 
 @st.cache_data(ttl=600)
 def carregar_dados_cobertura():
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Lê a aba "Cobertura / SKU (total)" pulando 17 linhas (início na linha 18 / célula B18)
+    # Lê a aba "Cobertura / SKU (total)" a partir do cabeçalho na célula B18 (linha 18 da planilha)
     df_raw = conn.read(worksheet="Cobertura / SKU (total)", skiprows=17)
     
-    # Isola a partir da coluna B (se houver SKU ou coluna similar)
-    if 'SKU' in df_raw.columns:
-        idx_sku = df_raw.columns.get_loc('SKU')
-        df = df_raw.iloc[:, idx_sku:].copy()
-    else:
-        df = df_raw.iloc[:, 1:].copy() if df_raw.shape[1] > 1 else df_raw.copy()
-        
+    df = df_raw.copy()
     df.columns = [str(col).replace('.1', '').strip() for col in df.columns]
     
-    # Limpeza de linhas vazias
-    col_referencia = 'SKU' if 'SKU' in df.columns else df.columns[0]
-    df = df.dropna(subset=[col_referencia])
+    if 'SKU' in df.columns:
+        df = df.dropna(subset=['SKU'])
     
-    # Conversão de colunas numéricas
-    for col in df.columns:
-        if col not in ['SKU', 'UF', 'material', 'Ano Base', 'Categoria', 'Status']:
-            if pd.api.types.is_numeric_dtype(df[col]):
-                df[col] = df[col].fillna(0)
-            else:
-                df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-                
+    for col in COLUNAS_NUMERICAS_COBERTURA:
+        if col in df.columns:
+            df[col] = df[col].apply(converter_valor_num)
+            
     return df
 
 # ==========================================
@@ -214,7 +225,7 @@ def renderizar_visao_demanda():
     if demandas_grafico:
         mapa_cores = {'Compensada': '#2ecc71', 'Em Aberto': '#e74c3c', 'Projetada': '#3498db'}
         
-        # 1. UF: MANTIDO NA POSIÇÃO ANTERIOR (COLUNAS VERTICAIS EMPILHADAS)
+        # 1. UF: COLUNAS VERTICAIS EMPILHADAS
         df_composicao_uf = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
         df_composicao_uf['UF'] = df_composicao_uf['UF'].astype(str)
         df_uf_melted = df_composicao_uf.melt(id_vars=['UF'], value_vars=demandas_grafico, var_name='Tipo de Demanda', value_name='Valor')
@@ -287,113 +298,104 @@ def renderizar_visao_cobertura():
     try:
         df = carregar_dados_cobertura()
     except Exception as e:
-        st.error(f"Erro ao carregar dados de Cobertura: {e}")
+        st.error(f"Erro ao carregar dados da aba Cobertura / SKU (total): {e}")
         return
 
     st.title("🛡️ Visão Gerencial - Cobertura de Estoque")
-    st.markdown("Análise estratégica da relação entre Estoque Disponível e Demanda por SKU.")
+    st.markdown("Análise detalhada de Oferta vs Demanda e Quebras por SKU (Aba B18:O450).")
 
     st.sidebar.header("Filtros de Cobertura")
-    
-    # Mapeamento dinâmico de colunas
-    col_ano = 'Ano Base' if 'Ano Base' in df.columns else None
-    col_uf = 'UF' if 'UF' in df.columns else None
-    col_mat = 'material' if 'material' in df.columns else ('Material' if 'Material' in df.columns else None)
-    col_sku = 'SKU' if 'SKU' in df.columns else df.columns[0]
-
-    ano_selecionado = st.sidebar.multiselect("Ano Base", sorted(df[col_ano].dropna().astype(str).unique()), key="cob_ano") if col_ano else []
-    uf_selecionada = st.sidebar.multiselect("Estado (UF)", sorted(df[col_uf].dropna().unique()), key="cob_uf") if col_uf else []
-    material_selecionado = st.sidebar.multiselect("Material", sorted(df[col_mat].dropna().unique()), key="cob_mat") if col_mat else []
+    ano_selecionado = st.sidebar.multiselect("Ano Base", sorted(df['Ano Base'].dropna().astype(str).unique()), key="cob_ano")
+    uf_selecionada = st.sidebar.multiselect("Estado (UF)", sorted(df['UF'].dropna().unique()), key="cob_uf")
+    material_selecionado = st.sidebar.multiselect("Material", sorted(df['material'].dropna().unique()), key="cob_mat")
 
     df_filtrado = df.copy()
-    if ano_selecionado and col_ano:
-        df_filtrado = df_filtrado[df_filtrado[col_ano].astype(str).isin(ano_selecionado)]
-    if uf_selecionada and col_uf:
-        df_filtrado = df_filtrado[df_filtrado[col_uf].isin(uf_selecionada)]
-    if material_selecionado and col_mat:
-        df_filtrado = df_filtrado[df_filtrado[col_mat].isin(material_selecionado)]
+    if ano_selecionado:
+        df_filtrado = df_filtrado[df_filtrado['Ano Base'].astype(str).isin(ano_selecionado)]
+    if uf_selecionada:
+        df_filtrado = df_filtrado[df_filtrado['UF'].isin(uf_selecionada)]
+    if material_selecionado:
+        df_filtrado = df_filtrado[df_filtrado['material'].isin(material_selecionado)]
 
     st.sidebar.divider()
     if st.sidebar.button("🔄 Atualizar Dados", key="cob_reload"):
         st.cache_data.clear()
         st.rerun()
 
-    # Identificação flexível de colunas de métrica na aba Cobertura
-    col_estoque = next((c for c in df.columns if 'estoque' in c.lower() or 'saldo' in c.lower()), None)
-    col_demanda = next((c for c in df.columns if 'demanda' in c.lower() or 'projetada' in c.lower()), None)
-    col_cobertura = next((c for c in df.columns if 'cobertura' in c.lower() or '%' in c.lower()), None)
-
-    total_estoque = df_filtrado[col_estoque].sum() if col_estoque else 0
-    total_demanda = df_filtrado[col_demanda].sum() if col_demanda else 0
-    
-    if col_cobertura:
-        cobertura_media = df_filtrado[col_cobertura].mean()
-    else:
-        cobertura_media = (total_estoque / total_demanda * 100) if total_demanda > 0 else 0
-
-    saldo_sobra = total_estoque - total_demanda
+    # CÁLCULOS DOS KPIs DE COBERTURA
+    total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
+    total_oferta_cob = df_filtrado['Oferta Total'].sum()
+    perc_cobertura_global = (total_oferta_cob / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
+    total_quebra_proj = df_filtrado['Quebra Projetada'].sum()
 
     st.subheader("Indicadores Chave de Cobertura (KPIs)")
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-    kpi1.metric("Estoque Total", f"{total_estoque:,.0f}".replace(",", "."))
-    kpi2.metric("Demanda Projetada", f"{total_demanda:,.0f}".replace(",", "."))
-    kpi3.metric("Cobertura Geral", f"{cobertura_media:.1f}%".replace(".", ","))
-    kpi4.metric("Saldo / Sobra", f"{saldo_sobra:,.0f}".replace(",", "."), delta="Sobra" if saldo_sobra >= 0 else "Déficit")
+    kpi1.metric("Demanda TOTAL", f"{total_demanda_cob:,.0f}".replace(",", "."))
+    kpi2.metric("Oferta Total", f"{total_oferta_cob:,.0f}".replace(",", "."))
+    kpi3.metric("Cobertura Geral", f"{perc_cobertura_global:.1f}%".replace(".", ","))
+    kpi4.metric("Quebra Projetada", f"{total_quebra_proj:,.0f}".replace(",", "."), delta="Quebra" if total_quebra_proj < 0 else "OK")
 
     st.divider()
 
-    st.subheader("Análise Visual de Cobertura")
+    # GRÁFICOS VISÃO COBERTURA
+    st.subheader("Análise Visual de Oferta e Cobertura")
     col_g1, col_g2 = st.columns(2)
 
     with col_g1:
-        if col_uf and col_estoque:
-            df_uf_cob = df_filtrado.groupby(col_uf, as_index=False)[col_estoque].sum().sort_values(col_estoque, ascending=False)
-            fig_uf_cob = px.bar(df_uf_cob, x=col_uf, y=col_estoque, title="Estoque Disponível por UF", color=col_estoque, color_continuous_scale="Greens")
-            fig_uf_cob.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
-            fig_uf_cob.update_layout(separators=".,", yaxis_tickformat=",.0f")
-            st.plotly_chart(fig_uf_cob, use_container_width=True)
+        df_uf_oferta = df_filtrado.groupby('UF', as_index=False)['Oferta Total'].sum().sort_values('Oferta Total', ascending=False)
+        fig_uf_oferta = px.bar(df_uf_oferta, x='UF', y='Oferta Total', title="Oferta Total por UF", color='Oferta Total', color_continuous_scale="Greens")
+        fig_uf_oferta.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
+        fig_uf_oferta.update_layout(separators=".,", yaxis_tickformat=",.0f")
+        st.plotly_chart(fig_uf_oferta, use_container_width=True)
 
     with col_g2:
-        if col_mat and col_cobertura:
-            df_mat_cob = df_filtrado.groupby(col_mat, as_index=False)[col_cobertura].mean()
-            fig_mat_cob = px.pie(df_mat_cob, values=col_cobertura, names=col_mat, title="Cobertura Média (%) por Material", hole=0.4)
-            fig_mat_cob.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(fig_mat_cob, use_container_width=True)
+        df_mat_oferta = df_filtrado.groupby('material', as_index=False)['Oferta Total'].sum()
+        fig_mat_oferta = px.pie(df_mat_oferta, values='Oferta Total', names='material', title="Distribuição da Oferta por Material", hole=0.4)
+        fig_mat_oferta.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="%{label}: %{value:,.0f}<extra></extra>")
+        fig_mat_oferta.update_layout(separators=".,")
+        st.plotly_chart(fig_mat_oferta, use_container_width=True)
 
-    st.markdown("#### Balanço de Cobertura por SKU (Top 20 + Demais SKUs)")
-    
-    if col_sku and col_estoque and col_demanda:
-        df_sku_cob = df_filtrado.groupby(col_sku, as_index=False)[[col_estoque, col_demanda]].sum()
-        df_sku_cob['Total_Volume'] = df_sku_cob[col_estoque] + df_sku_cob[col_demanda]
-        df_sku_cob = df_sku_cob.sort_values(by='Total_Volume', ascending=False)
+    st.markdown("#### Composição da Oferta por UF e SKU")
+    opcoes_oferta = ['Oferta Atual', 'Oferta Projetada (ativos)', 'Oferta Projetada (expansão)']
+    ofertas_grafico = st.multiselect("Selecione os Tipos de Oferta para visualizar nos gráficos:", options=opcoes_oferta, default=opcoes_oferta, key="cob_multi")
 
-        if len(df_sku_cob) > 20:
-            df_top20 = df_sku_cob.iloc[:20].copy()
-            df_demais = df_sku_cob.iloc[20:].copy()
-            dict_demais = {
-                col_sku: 'Demais SKUs',
-                col_estoque: df_demais[col_estoque].sum(),
-                col_demanda: df_demais[col_demanda].sum(),
-                'Total_Volume': df_demais['Total_Volume'].sum()
-            }
-            df_final_sku_cob = pd.concat([df_top20, pd.DataFrame([dict_demais])], ignore_index=True)
-        else:
-            df_final_sku_cob = df_sku_cob.copy()
+    if ofertas_grafico:
+        mapa_cores_cobertura = {'Oferta Atual': '#2ecc71', 'Oferta Projetada (ativos)': '#3498db', 'Oferta Projetada (expansão)': '#9b59b6'}
 
-        df_final_sku_cob[col_sku] = df_final_sku_cob[col_sku].astype(str)
-        ordem_y_cob = df_final_sku_cob[col_sku].tolist()[::-1]
+        # 1. COMPOSIÇÃO DE OFERTA POR UF (COLUNAS VERTICAIS EMPILHADAS)
+        df_composicao_uf_cob = df_filtrado.groupby('UF', as_index=False)[ofertas_grafico].sum()
+        df_composicao_uf_cob['UF'] = df_composicao_uf_cob['UF'].astype(str)
+        df_uf_melted_cob = df_composicao_uf_cob.melt(id_vars=['UF'], value_vars=ofertas_grafico, var_name='Tipo de Oferta', value_name='Valor')
 
-        df_sku_melted_cob = df_final_sku_cob.melt(
-            id_vars=[col_sku], 
-            value_vars=[col_estoque, col_demanda], 
-            var_name='Métrica', value_name='Valor'
+        fig_comp_uf_cob = px.bar(
+            df_uf_melted_cob, x='UF', y='Valor', color='Tipo de Oferta',
+            title="Composição da Oferta por UF", color_discrete_map=mapa_cores_cobertura, barmode='stack'
         )
+        fig_comp_uf_cob.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
+        fig_comp_uf_cob.update_layout(separators=".,", yaxis_tickformat=",.0f", xaxis={'type': 'category', 'categoryorder': 'total descending'})
+        st.plotly_chart(fig_comp_uf_cob, use_container_width=True)
+
+        # 2. COMPOSIÇÃO DE OFERTA POR SKU (BARRAS HORIZONTAIS EMPILHADAS TOP 20 + DEMAIS SKUS)
+        df_composicao_sku_cob = df_filtrado.groupby('SKU', as_index=False)[ofertas_grafico + ['Oferta Total']].sum()
+        df_composicao_sku_cob = df_composicao_sku_cob.sort_values(by='Oferta Total', ascending=False)
+
+        if len(df_composicao_sku_cob) > 20:
+            df_top20_cob = df_composicao_sku_cob.iloc[:20].copy()
+            df_demais_cob = df_composicao_sku_cob.iloc[20:].copy()
+            dict_demais_cob = {'SKU': 'Demais SKUs', 'Oferta Total': df_demais_cob['Oferta Total'].sum()}
+            for o_col in ofertas_grafico:
+                dict_demais_cob[o_col] = df_demais_cob[o_col].sum()
+            df_final_sku_cob = pd.concat([df_top20_cob, pd.DataFrame([dict_demais_cob])], ignore_index=True)
+        else:
+            df_final_sku_cob = df_composicao_sku_cob.copy()
+
+        df_final_sku_cob['SKU'] = df_final_sku_cob['SKU'].astype(str)
+        ordem_y_cob = df_final_sku_cob['SKU'].tolist()[::-1]
+        df_sku_melted_cob = df_final_sku_cob.melt(id_vars=['SKU'], value_vars=ofertas_grafico, var_name='Tipo de Oferta', value_name='Valor')
 
         fig_comp_sku_cob = px.bar(
-            df_sku_melted_cob, x='Valor', y=col_sku, color='Métrica', orientation='h',
-            title="Comparativo Estoque vs Demanda por SKU",
-            color_discrete_map={col_estoque: '#2ecc71', col_demanda: '#e74c3c'},
-            barmode='group'
+            df_sku_melted_cob, x='Valor', y='SKU', color='Tipo de Oferta', orientation='h',
+            title="Composição da Oferta por SKU (Top 20 + Demais SKUs)", color_discrete_map=mapa_cores_cobertura, barmode='stack'
         )
         fig_comp_sku_cob.update_traces(hovertemplate="%{data.name}: %{x:,.0f}<extra></extra>")
         fig_comp_sku_cob.update_layout(
@@ -402,17 +404,30 @@ def renderizar_visao_cobertura():
         )
         st.plotly_chart(fig_comp_sku_cob, use_container_width=True)
 
+    # TABELA DETALHADA COBERTURA
     with st.expander("Ver Dados Detalhados de Cobertura"):
-        def formatar_num(v):
+        df_tabela_cob = df_filtrado.copy()
+        
+        # Cálculo de colunas percentuais de cobertura e quebra
+        df_tabela_cob['% Cobertura'] = (df_tabela_cob['Oferta Total'] / df_tabela_cob['Demanda TOTAL']).fillna(0)
+        df_tabela_cob['% Quebra Projetada'] = (df_tabela_cob['Quebra Projetada'] / df_tabela_cob['Demanda TOTAL']).fillna(0)
+
+        def formatar_numero_br(v):
             try: return f"{v:,.0f}".replace(",", ".")
             except: return v
-        
-        cols_num = df_filtrado.select_dtypes(include=['float64', 'int64']).columns
-        dict_fmt = {c: formatar_num for c in cols_num}
-        st.dataframe(df_filtrado.style.format(dict_fmt), use_container_width=True)
+
+        def formatar_percentual(v):
+            try: return f"{v * 100:.1f}%".replace(".", ",")
+            except: return v
+
+        formato_dict_cob = {col: formatar_numero_br for col in COLUNAS_NUMERICAS_COBERTURA if col in df_tabela_cob.columns}
+        formato_dict_cob['% Cobertura'] = formatar_percentual
+        formato_dict_cob['% Quebra Projetada'] = formatar_percentual
+
+        st.dataframe(df_tabela_cob.style.format(formato_dict_cob), use_container_width=True)
 
 # ==========================================
-# ROTAEAMENTO DE PÁGINAS
+# ROTEAMENTO DE PÁGINAS
 # ==========================================
 if pagina_selecionada == "📊 Visão de Demanda":
     renderizar_visao_demanda()
