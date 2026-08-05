@@ -83,7 +83,7 @@ def carregar_dados_finais():
     conn = st.connection("gsheets", type=GSheetsConnection)
     
     # Lê a aba "Demanda", pulando as 4 primeiras linhas como fazíamos no CSV
-    df_raw = conn.read(worksheet="Demanda", skiprows=4)
+    df_raw = conn.read(worksheet="[Demanda] Visão Gerencial", skiprows=4)
     
     # 2. Isola a tabela detalhada (Começa a partir da coluna SKU)
     if 'SKU' in df_raw.columns:
