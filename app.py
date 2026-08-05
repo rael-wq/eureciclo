@@ -76,43 +76,30 @@ if st.sidebar.button("Sair (Logout)"):
     del st.session_state["user_email"]
     st.rerun()
 
-# O ttl agora é 600 segundos (10 minutos) para evitar bloqueio da API do Google
 @st.cache_data(ttl=600)
 def carregar_dados_finais():
-    # Cria a conexão com o Google Sheets usando as credenciais do Secrets
     conn = st.connection("gsheets", type=GSheetsConnection)
-    
-    # Lê a aba "Demanda", pulando as 4 primeiras linhas
     df_raw = conn.read(worksheet="[Demanda] Visão Gerencial", skiprows=4)
     
-    # 2. Isola a tabela detalhada (Começa a partir da coluna SKU)
     if 'SKU' in df_raw.columns:
         idx_sku = df_raw.columns.get_loc('SKU')
         df = df_raw.iloc[:, idx_sku:].copy()
     else:
-        # Fallback caso a estrutura mude
         df = df_raw.copy()
     
-    # 3. Limpa os nomes das colunas (tira '.1' gerado por colunas duplicadas)
     df.columns = [str(col).replace('.1', '').strip() for col in df.columns]
-    
-    # 4. Remove linhas vazias no final
     df = df.dropna(subset=['SKU'])
     
-    # 5. Tratamento de dados numéricos vindos do Sheets
     for col in COLUNAS_NUMERICAS:
         if col in df.columns:
-            # Verifica se o Google Sheets já enviou a coluna formatada como número
             if pd.api.types.is_numeric_dtype(df[col]):
                 df[col] = df[col].fillna(0)
             else:
-                # Se for texto, aplica a regra de conversão de moeda brasileira
                 df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
     return df
 
-# Tratamento de erro na conexão visual
 try:
     df = carregar_dados_finais()
 except Exception as e:
@@ -144,7 +131,7 @@ if st.sidebar.button("🔄 Atualizar Dados"):
     st.rerun()            
 
 # ==========================================
-# CÁLCULOS GLOBAIS E KPIs COM %
+# CÁLCULOS GLOBAIS E KPIs
 # ==========================================
 st.subheader("Indicadores Chave (KPIs)")
 
@@ -153,15 +140,12 @@ total_compensada = df_filtrado['Compensada'].sum() if 'Compensada' in df_filtrad
 total_em_aberto = df_filtrado['Em Aberto'].sum() if 'Em Aberto' in df_filtrado.columns else 0
 total_projetada = df_filtrado['Projetada'].sum() if 'Projetada' in df_filtrado.columns else 0
 
-# Base de cálculo para os percentuais globais
 soma_demanda_calc = total_compensada + total_em_aberto + total_projetada
-
 perc_compensada = (total_compensada / soma_demanda_calc * 100) if soma_demanda_calc > 0 else 0
 perc_em_aberto = (total_em_aberto / soma_demanda_calc * 100) if soma_demanda_calc > 0 else 0
 perc_projetada = (total_projetada / soma_demanda_calc * 100) if soma_demanda_calc > 0 else 0
 
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-
 kpi1.metric("Demanda Total (Calculada)", f"{soma_demanda_calc:,.0f}".replace(",", "."))
 kpi2.metric("Compensada", f"{total_compensada:,.0f}".replace(",", "."), f"{perc_compensada:.1f}%", delta_color="off")
 kpi3.metric("Em Aberto", f"{total_em_aberto:,.0f}".replace(",", "."), f"{perc_em_aberto:.1f}%", delta_color="off")
@@ -201,12 +185,16 @@ demandas_grafico = st.multiselect(
 if demandas_grafico:
     mapa_cores = {'Compensada': '#2ecc71', 'Em Aberto': '#e74c3c', 'Projetada': '#3498db'}
     
-    # --- GRÁFICO 1: COMPOSIÇÃO POR UF (Barras/Colunas Empilhadas Verticais Z-A) ---
+    # --- GRÁFICO 1: COMPOSIÇÃO POR UF ---
     df_composicao_uf = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
+    # Transforma os dados para garantir que o Plotly faça o empilhamento correto
+    df_uf_melted = df_composicao_uf.melt(id_vars='UF', value_vars=demandas_grafico, var_name='Tipo de Demanda', value_name='Valor')
+    
     fig_comp_uf = px.bar(
-        df_composicao_uf, 
+        df_uf_melted, 
         x='UF', 
-        y=demandas_grafico, 
+        y='Valor', 
+        color='Tipo de Demanda',
         title="Composição da Demanda por UF", 
         barmode='stack', 
         color_discrete_map=mapa_cores
@@ -215,51 +203,44 @@ if demandas_grafico:
     fig_comp_uf.update_layout(
         separators=".,", 
         yaxis_tickformat=",.0f", 
-        legend_title_text="Tipo de Demanda",
         xaxis={'categoryorder': 'total descending'} 
     )
     st.plotly_chart(fig_comp_uf, use_container_width=True)
 
-    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU (Colunas Empilhadas Verticais Top 20) ---
-    # 1. Agrupa por SKU
+    # --- GRÁFICO 2: COMPOSIÇÃO POR SKU ---
     df_composicao_sku = df_filtrado.groupby('SKU', as_index=False)[opcoes_demanda].sum()
-    
-    # 2. Cria uma coluna totalizadora baseada no que o usuário selecionou para ordenar
     df_composicao_sku['Total_Selecionado'] = df_composicao_sku[demandas_grafico].sum(axis=1)
-    
-    # 3. Ordena do maior para o menor
     df_composicao_sku = df_composicao_sku.sort_values(by='Total_Selecionado', ascending=False)
     
-    # 4. Lógica do Top 20 + Demais SKUs
     if len(df_composicao_sku) > 20:
         df_top20 = df_composicao_sku.iloc[:20].copy()
         df_demais = df_composicao_sku.iloc[20:].copy()
         
-        # Cria um dicionário com a soma dos 'Demais SKUs'
         dict_demais = {'SKU': 'Demais SKUs', 'Total_Selecionado': df_demais['Total_Selecionado'].sum()}
         for demanda in opcoes_demanda:
             dict_demais[demanda] = df_demais[demanda].sum()
             
-        # Adiciona a linha 'Demais SKUs' ao final do Top 20
         df_demais_row = pd.DataFrame([dict_demais])
         df_final_sku = pd.concat([df_top20, df_demais_row], ignore_index=True)
     else:
         df_final_sku = df_composicao_sku.copy()
 
-    # 5. Gera o gráfico de COLUNAS empilhadas VERTICALMENTE (px.bar com eixo X categórico)
+    # Transforma (melt) os dados para garantir que as barras não fiquem lado a lado
+    df_sku_melted = df_final_sku.melt(id_vars=['SKU', 'Total_Selecionado'], value_vars=demandas_grafico, var_name='Tipo de Demanda', value_name='Valor')
+
     fig_comp_sku = px.bar(
-        df_final_sku, 
-        x='SKU',             # O eixo X recebe os SKUs (horizontal)
-        y=demandas_grafico,  # O eixo Y recebe os valores (crescendo verticalmente)
+        df_sku_melted, 
+        x='SKU',             
+        y='Valor',  
+        color='Tipo de Demanda', 
         title="Composição da Demanda por SKU (Top 20 + Demais SKUs)", 
-        barmode='stack',     # Garante o empilhamento em colunas
+        barmode='stack',     # Garante o empilhamento vertical
         color_discrete_map=mapa_cores
     )
     fig_comp_sku.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
     fig_comp_sku.update_layout(
         separators=".,", 
         yaxis_tickformat=",.0f", 
-        legend_title_text="Tipo de Demanda",
         xaxis={'categoryorder': 'array', 'categoryarray': df_final_sku['SKU'].tolist()} 
     )
     st.plotly_chart(fig_comp_sku, use_container_width=True)
