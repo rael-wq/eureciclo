@@ -88,7 +88,7 @@ PALETA_EURECICLO = {
 }
 
 # URL do Logo Oficial eureciclo
-LOGO_EURECICLO_URL = "https://eureciclo.com.br/wp-content/uploads/2022/03/logo-eureciclo.svg"
+LOGO_EURECICLO_URL = "https://pages.greatpages.com.br/lp.bowe.com.br-lp-eu-logistica/1782305795/imagens/desktop/3604298_1_17823057706a3bd3ea90543409291793.svg"
 
 # ==========================================
 # FUNÇÃO AUXILIAR DE TRATAMENTO NUMÉRICO
