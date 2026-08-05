@@ -6,9 +6,62 @@ from streamlit_oauth import OAuth2Component
 from streamlit_gsheets import GSheetsConnection
 
 # ==========================================
-# CONFIGURAÇÃO GERAL
+# CONFIGURAÇÃO GERAL E TEMA EURECICLO
 # ==========================================
-st.set_page_config(page_title="Dashboard Executivo - Operações", layout="wide")
+st.set_page_config(page_title="Dashboard Executivo - eureciclo", layout="wide", page_icon="♻️")
+
+# Estilização CSS inspirada no portal eureciclo
+st.markdown("""
+    <style>
+    /* Estilo Global e Cores eureciclo */
+    :root {
+        --eureciclo-green: #00A859;
+        --eureciclo-dark-green: #007A40;
+        --eureciclo-light-bg: #F8FAF8;
+        --eureciclo-dark: #1E293B;
+        --eureciclo-coral: #FF5A5F;
+        --eureciclo-blue: #0284C7;
+    }
+    
+    /* Fontes e Títulos */
+    h1, h2, h3 {
+        color: #1E293B !important;
+        font-family: 'Open Sans', 'Segoe UI', sans-serif;
+        font-weight: 700;
+    }
+    
+    /* Ajustes na Barra Lateral */
+    [data-testid="stSidebar"] {
+        background-color: #F1F5F9 !important;
+        border-right: 1px solid #E2E8F0;
+    }
+    
+    /* Métricas / Cards */
+    [data-testid="stMetricValue"] {
+        color: #00A859 !important;
+        font-weight: 700;
+    }
+    
+    /* Botões Customizados */
+    .stButton>button {
+        background-color: #00A859 !important;
+        color: white !important;
+        border-radius: 8px !important;
+        border: none !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        background-color: #007A40 !important;
+        box-shadow: 0 4px 12px rgba(0, 168, 89, 0.25);
+    }
+    
+    /* Tabelas */
+    .dataframe {
+        border-radius: 8px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 COLUNAS_NUMERICAS_DEMANDA = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
 
@@ -16,6 +69,17 @@ COLUNAS_NUMERICAS_COBERTURA = [
     'Demanda Atual', 'Demanda Projetada', 'Demanda TOTAL', 
     'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops'
 ]
+
+# Paleta de Cores eureciclo para Gráficos
+PALETA_EURECICLO = {
+    'Compensada': '#00A859',        # Verde eureciclo
+    'Em Aberto': '#FF5A5F',         # Coral / Alerta
+    'Projetada': '#0284C7',         # Azul Oceano
+    'Quebra Atual': '#EF4444',      # Vermelho Alerta
+    'Quebra Projetada': '#F97316',  # Laranja
+    'Quebra Projetada c/ pipe Ops': '#EAB308', # Amarelo/Âmbar
+    'Verde_Escala': ['#E6F7ED', '#99E0B9', '#33C47F', '#00A859', '#007A40']
+}
 
 # ==========================================
 # FUNÇÃO AUXILIAR DE TRATAMENTO NUMÉRICO
@@ -38,6 +102,15 @@ def converter_valor_num(val):
     except ValueError:
         return 0.0
 
+# ==========================================
+# NAVEGAÇÃO ENTRE PÁGINAS NO MENU LATERAL
+# ==========================================
+st.sidebar.markdown("## ♻️ eureciclo")
+pagina_selecionada = st.sidebar.radio(
+    "Navegação do Dashboard:",
+    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura"]
+)
+st.sidebar.divider()
 
 # ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
@@ -64,7 +137,7 @@ def check_login():
             st.error(f"❌ Acesso negado: {st.session_state['user_email']} não autorizado.")
             return False
 
-    st.markdown("### 🔒 Acesso Restrito")
+    st.markdown("### 🔒 Acesso Restrito - Portal eureciclo")
     st.markdown("Faça login com sua conta corporativa `@nhecotech.com` para visualizar o dashboard.")
     
     result = oauth2.authorize_button(
@@ -99,17 +172,6 @@ if st.sidebar.button("Sair (Logout)"):
     del st.session_state["user_email"]
     st.rerun()
 
-st.sidebar.divider()
-# ==========================================
-# NAVEGAÇÃO ENTRE PÁGINAS NO MENU LATERAL
-# ==========================================
-st.sidebar.title("📌 Navegação")
-pagina_selecionada = st.sidebar.radio(
-    "Selecione a Visão:",
-    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura"]
-)
-st.sidebar.divider()
-
 # ==========================================
 # CARREGAMENTO DOS DADOS (CACHE DE 10 MIN)
 # ==========================================
@@ -136,7 +198,6 @@ def carregar_dados_demanda():
 @st.cache_data(ttl=600)
 def carregar_dados_cobertura():
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Lê a aba "Cobertura / SKU (total)" a partir da célula B18 (skiprows=17)
     df_raw = conn.read(worksheet="Cobertura / SKU (total)", skiprows=17)
     
     df = df_raw.copy()
@@ -162,7 +223,7 @@ def renderizar_visao_demanda():
         return
 
     st.title("📊 Visão Gerencial - Demanda de Estoque")
-    st.markdown("Visão executiva detalhada por SKU com filtros dinâmicos.")
+    st.markdown("Gestão executiva de demanda e saldo por SKU.")
 
     st.sidebar.header("Filtros de Demanda")
     ano_selecionado = st.sidebar.multiselect("Ano Base", sorted(df['Ano Base'].dropna().astype(str).unique()), key="dem_ano")
@@ -207,16 +268,25 @@ def renderizar_visao_demanda():
 
     with col_graf1:
         df_uf = df_filtrado.groupby('UF', as_index=False)['DEMANDA TOTAL'].sum().sort_values('DEMANDA TOTAL', ascending=False)
-        fig_uf = px.bar(df_uf, x='UF', y='DEMANDA TOTAL', title="Demanda Total por UF", color='DEMANDA TOTAL', color_continuous_scale="Blues")
+        fig_uf = px.bar(
+            df_uf, x='UF', y='DEMANDA TOTAL', 
+            title="Demanda Total por UF", 
+            color='DEMANDA TOTAL', 
+            color_continuous_scale=PALETA_EURECICLO['Verde_Escala']
+        )
         fig_uf.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
-        fig_uf.update_layout(separators=".,", yaxis_tickformat=",.0f")
+        fig_uf.update_layout(separators=".,", yaxis_tickformat=",.0f", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_uf, use_container_width=True)
 
     with col_graf2:
         df_mat = df_filtrado.groupby('material', as_index=False)['DEMANDA TOTAL'].sum()
-        fig_mat = px.pie(df_mat, values='DEMANDA TOTAL', names='material', title="Distribuição da Demanda por Material", hole=0.4)
+        fig_mat = px.pie(
+            df_mat, values='DEMANDA TOTAL', names='material', 
+            title="Distribuição da Demanda por Material", hole=0.4,
+            color_discrete_sequence=['#00A859', '#0284C7', '#FF5A5F', '#EAB308']
+        )
         fig_mat.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="%{label}: %{value:,.0f}<extra></extra>")
-        fig_mat.update_layout(separators=".,")
+        fig_mat.update_layout(separators=".,", paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_mat, use_container_width=True)
 
     st.markdown("#### Composição do Estoque (Visão por UF e SKU)")
@@ -224,7 +294,11 @@ def renderizar_visao_demanda():
     demandas_grafico = st.multiselect("Selecione as Demandas:", options=opcoes_demanda, default=opcoes_demanda, key="dem_multi")
 
     if demandas_grafico:
-        mapa_cores = {'Compensada': '#2ecc71', 'Em Aberto': '#e74c3c', 'Projetada': '#3498db'}
+        mapa_cores = {
+            'Compensada': PALETA_EURECICLO['Compensada'], 
+            'Em Aberto': PALETA_EURECICLO['Em Aberto'], 
+            'Projetada': PALETA_EURECICLO['Projetada']
+        }
         
         # 1. UF: COLUNAS VERTICAIS EMPILHADAS
         df_composicao_uf = df_filtrado.groupby('UF', as_index=False)[opcoes_demanda].sum()
@@ -236,10 +310,14 @@ def renderizar_visao_demanda():
             title="Composição da Demanda por UF", color_discrete_map=mapa_cores, barmode='stack'
         )
         fig_comp_uf.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
-        fig_comp_uf.update_layout(separators=".,", yaxis_tickformat=",.0f", xaxis={'type': 'category', 'categoryorder': 'total descending'})
+        fig_comp_uf.update_layout(
+            separators=".,", yaxis_tickformat=",.0f", 
+            xaxis={'type': 'category', 'categoryorder': 'total descending'},
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
+        )
         st.plotly_chart(fig_comp_uf, use_container_width=True)
 
-        # 2. SKU: BARRAS HORIZONTAIS EMPILHADAS (UM EMBAIXO DO OUTRO)
+        # 2. SKU: BARRAS HORIZONTAIS EMPILHADAS
         df_composicao_sku = df_filtrado.groupby('SKU', as_index=False)[opcoes_demanda].sum()
         df_composicao_sku['Total_Selecionado'] = df_composicao_sku[demandas_grafico].sum(axis=1)
         df_composicao_sku = df_composicao_sku.sort_values(by='Total_Selecionado', ascending=False)
@@ -265,7 +343,8 @@ def renderizar_visao_demanda():
         fig_comp_sku.update_traces(hovertemplate="%{data.name}: %{x:,.0f}<extra></extra>")
         fig_comp_sku.update_layout(
             separators=".,", xaxis_tickformat=",.0f",
-            yaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': ordem_y}, height=600
+            yaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': ordem_y}, height=600,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
         )
         st.plotly_chart(fig_comp_sku, use_container_width=True)
 
@@ -303,7 +382,7 @@ def renderizar_visao_cobertura():
         return
 
     st.title("🛡️ Visão Gerencial - Cobertura e Quebras de Estoque")
-    st.markdown("Análise detalhada de Quebras e Déficit por SKU (Aba B18:O450).")
+    st.markdown("Análise detalhada de Quebras e Déficit por SKU.")
 
     st.sidebar.header("Filtros de Cobertura")
     ano_selecionado = st.sidebar.multiselect("Ano Base", sorted(df['Ano Base'].dropna().astype(str).unique()), key="cob_ano")
@@ -357,23 +436,32 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # GRÁFICOS VISÃO COBERTURA (EXCLUSIVO QUEBRAS)
+    # GRÁFICOS VISÃO COBERTURA
     st.subheader("Análise Visual de Quebras")
     col_g1, col_g2 = st.columns(2)
 
     with col_g1:
         df_uf_quebra = df_filtrado.groupby('UF', as_index=False)['Quebra Projetada'].sum().sort_values('Quebra Projetada', ascending=True)
-        fig_uf_quebra = px.bar(df_uf_quebra, x='UF', y='Quebra Projetada', title="Quebra Projetada por UF", color='Quebra Projetada', color_continuous_scale="Reds_r")
+        fig_uf_quebra = px.bar(
+            df_uf_quebra, x='UF', y='Quebra Projetada', 
+            title="Quebra Projetada por UF", 
+            color='Quebra Projetada', 
+            color_continuous_scale=['#EF4444', '#F97316', '#FEF08A']
+        )
         fig_uf_quebra.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
-        fig_uf_quebra.update_layout(separators=".,", yaxis_tickformat=",.0f")
+        fig_uf_quebra.update_layout(separators=".,", yaxis_tickformat=",.0f", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_uf_quebra, use_container_width=True)
 
     with col_g2:
         df_mat_quebra = df_filtrado.groupby('material', as_index=False)['Quebra Projetada'].sum()
         df_mat_quebra['Abs_Quebra'] = df_mat_quebra['Quebra Projetada'].abs()
-        fig_mat_quebra = px.pie(df_mat_quebra, values='Abs_Quebra', names='material', title="Distribuição da Quebra Projetada por Material", hole=0.4)
+        fig_mat_quebra = px.pie(
+            df_mat_quebra, values='Abs_Quebra', names='material', 
+            title="Distribuição da Quebra Projetada por Material", hole=0.4,
+            color_discrete_sequence=['#EF4444', '#F97316', '#EAB308', '#0284C7']
+        )
         fig_mat_quebra.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="%{label}: %{value:,.0f}<extra></extra>")
-        fig_mat_quebra.update_layout(separators=".,")
+        fig_mat_quebra.update_layout(separators=".,", paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_mat_quebra, use_container_width=True)
 
     st.markdown("#### Composição das Quebras por UF e SKU")
@@ -381,7 +469,11 @@ def renderizar_visao_cobertura():
     quebras_grafico = st.multiselect("Selecione os Tipos de Quebra para visualizar nos gráficos:", options=opcoes_quebra, default=opcoes_quebra, key="cob_multi")
 
     if quebras_grafico:
-        mapa_cores_quebra = {'Quebra Atual': '#e74c3c', 'Quebra Projetada': '#e67e22', 'Quebra Projetada c/ pipe Ops': '#f39c12'}
+        mapa_cores_quebra = {
+            'Quebra Atual': PALETA_EURECICLO['Quebra Atual'], 
+            'Quebra Projetada': PALETA_EURECICLO['Quebra Projetada'], 
+            'Quebra Projetada c/ pipe Ops': PALETA_EURECICLO['Quebra Projetada c/ pipe Ops']
+        }
 
         # 1. COMPOSIÇÃO DE QUEBRA POR UF (COLUNAS VERTICAIS EMPILHADAS)
         df_composicao_uf_quebra = df_filtrado.groupby('UF', as_index=False)[quebras_grafico].sum()
@@ -393,7 +485,11 @@ def renderizar_visao_cobertura():
             title="Composição da Quebra por UF", color_discrete_map=mapa_cores_quebra, barmode='stack'
         )
         fig_comp_uf_quebra.update_traces(hovertemplate="%{data.name}: %{y:,.0f}<extra></extra>")
-        fig_comp_uf_quebra.update_layout(separators=".,", yaxis_tickformat=",.0f", xaxis={'type': 'category', 'categoryorder': 'total ascending'})
+        fig_comp_uf_quebra.update_layout(
+            separators=".,", yaxis_tickformat=",.0f", 
+            xaxis={'type': 'category', 'categoryorder': 'total ascending'},
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
+        )
         st.plotly_chart(fig_comp_uf_quebra, use_container_width=True)
 
         # 2. COMPOSIÇÃO DE QUEBRA POR SKU (BARRAS HORIZONTAIS EMPILHADAS TOP 20 + DEMAIS SKUS)
@@ -422,11 +518,12 @@ def renderizar_visao_cobertura():
         fig_comp_sku_quebra.update_traces(hovertemplate="%{data.name}: %{x:,.0f}<extra></extra>")
         fig_comp_sku_quebra.update_layout(
             separators=".,", xaxis_tickformat=",.0f",
-            yaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': ordem_y_quebra}, height=600
+            yaxis={'type': 'category', 'categoryorder': 'array', 'categoryarray': ordem_y_quebra}, height=600,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
         )
         st.plotly_chart(fig_comp_sku_quebra, use_container_width=True)
 
-    # TABELA DETALHADA COBERTURA / QUEBRAS (SEM COLUNAS PERCENTUAIS)
+    # TABELA DETALHADA COBERTURA / QUEBRAS
     with st.expander("Ver Dados Detalhados de Quebras"):
         df_tabela_cob = df_filtrado.copy()
 
