@@ -16,6 +16,7 @@ st.set_page_config(
 )
 
 # Estilização CSS inspirada no portal principal da eureciclo (eureciclo.com.br)
+# Ajustes adicionais de compacidade para tabelas compactas e lado a lado
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
@@ -44,6 +45,12 @@ st.markdown("""
     h2, h3 {
         font-size: 1.3rem !important;
         margin-top: 1rem !important;
+    }
+
+    h5 {
+        font-size: 0.95rem !important;
+        margin-bottom: 0.3rem !important;
+        font-weight: 600 !important;
     }
 
     /* Barra Lateral Ajustada */
@@ -90,6 +97,15 @@ st.markdown("""
     .stButton>button:hover {
         background-color: #007A40 !important;
         box-shadow: 0 4px 12px rgba(0, 168, 89, 0.3) !important;
+    }
+
+    /* Redução e Compacidade das Tabelas Dataframe */
+    [data-testid="stDataFrame"] {
+        font-size: 0.72rem !important;
+    }
+    
+    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
+        padding: 2px 4px !important;
     }
 
     /* Dividers */
@@ -497,15 +513,14 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS DAS 3 QUEBRAS (UF x MATERIAL)
+    # TABELAS PIVOTEADAS LADO A LADO DAS 3 QUEBRAS (UF x MATERIAL) COM SOMA APENAS DOS VALORES NEGATIVOS
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
         try: return f"{v:,.0f}".replace(",", ".")
         except: return v
 
-    def criar_tabela_pivot_quebra(coluna_metrica, titulo):
-        st.markdown(f"##### {titulo}")
+    def gerar_styler_pivot(coluna_metrica):
         if coluna_metrica in df_filtrado.columns and 'UF' in df_filtrado.columns and 'material' in df_filtrado.columns:
             pivot_df = df_filtrado.pivot_table(
                 index='UF', 
@@ -514,23 +529,46 @@ def renderizar_visao_cobertura():
                 aggfunc='sum', 
                 fill_value=0
             )
-            pivot_df['Total'] = pivot_df.sum(axis=1)
+            # Coluna de Total considerando APENAS os valores negativos da linha
+            pivot_df['Total Negativo'] = pivot_df.apply(lambda row: row[row < 0].sum(), axis=1)
+            
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
             
-            # Compatibilidade Pandas (Pandas <2.1 style.applymap / Pandas 2.1+ style.map)
             styler_obj = pivot_df.style.format(fmt_dict)
             if hasattr(styler_obj, "map"):
                 styler = styler_obj.map(colorir_celula_quebra)
             else:
                 styler = styler_obj.applymap(colorir_celula_quebra)
             
-            st.dataframe(styler, use_container_width=True)
-        else:
-            st.warning(f"Não foi possível gerar a tabela de {titulo}.")
+            return styler
+        return None
 
-    criar_tabela_pivot_quebra('Quebra Atual', '1. Quebra Atual por UF x Material')
-    criar_tabela_pivot_quebra('Quebra Projetada', '2. Quebra Projetada por UF x Material')
-    criar_tabela_pivot_quebra('Quebra Projetada c/ pipe Ops', '3. Quebra Projetada c/ Pipe Ops por UF x Material')
+    # Exibição das 3 tabelas LADO A LADO usando 3 colunas horizontais
+    col_t1, col_t2, col_t3 = st.columns(3)
+
+    with col_t1:
+        st.markdown("##### 1. Quebra Atual")
+        styler1 = gerar_styler_pivot('Quebra Atual')
+        if styler1:
+            st.dataframe(styler1, use_container_width=True, height=450)
+        else:
+            st.warning("Dados indisponíveis.")
+
+    with col_t2:
+        st.markdown("##### 2. Quebra Projetada")
+        styler2 = gerar_styler_pivot('Quebra Projetada')
+        if styler2:
+            st.dataframe(styler2, use_container_width=True, height=450)
+        else:
+            st.warning("Dados indisponíveis.")
+
+    with col_t3:
+        st.markdown("##### 3. Quebra c/ Pipe Ops")
+        styler3 = gerar_styler_pivot('Quebra Projetada c/ pipe Ops')
+        if styler3:
+            st.dataframe(styler3, use_container_width=True, height=450)
+        else:
+            st.warning("Dados indisponíveis.")
 
     st.divider()
 
