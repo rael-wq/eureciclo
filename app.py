@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # Estilização CSS inspirada no portal principal da eureciclo (eureciclo.com.br)
-# Ajustes adicionais de compacidade para tabelas compactas e lado a lado
+# Ajustes de compacidade para eliminar scroll vertical/horizontal
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
@@ -48,7 +48,7 @@ st.markdown("""
     }
 
     h5 {
-        font-size: 0.95rem !important;
+        font-size: 0.9rem !important;
         margin-bottom: 0.3rem !important;
         font-weight: 600 !important;
     }
@@ -99,13 +99,15 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0, 168, 89, 0.3) !important;
     }
 
-    /* Redução e Compacidade das Tabelas Dataframe */
+    /* Redução e Compacidade Máxima para Eliminar Scroll */
     [data-testid="stDataFrame"] {
-        font-size: 0.72rem !important;
+        font-size: 0.68rem !important;
+        width: 100% !important;
     }
     
     [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
-        padding: 2px 4px !important;
+        padding: 1px 2px !important;
+        white-space: nowrap !important;
     }
 
     /* Dividers */
@@ -513,7 +515,7 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS LADO A LADO DAS 3 QUEBRAS (UF x MATERIAL) COM SOMA APENAS DOS VALORES NEGATIVOS
+    # TABELAS PIVOTEADAS LADO A LADO DAS 3 QUEBRAS (UF x MATERIAL)
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
@@ -543,14 +545,14 @@ def renderizar_visao_cobertura():
             return styler
         return None
 
-    # Exibição das 3 tabelas LADO A LADO usando 3 colunas horizontais
+    # Exibição das 3 tabelas LADO A LADO sem scroll fixo
     col_t1, col_t2, col_t3 = st.columns(3)
 
     with col_t1:
         st.markdown("##### 1. Quebra Atual")
         styler1 = gerar_styler_pivot('Quebra Atual')
         if styler1:
-            st.dataframe(styler1, use_container_width=True, height=450)
+            st.dataframe(styler1, use_container_width=True)
         else:
             st.warning("Dados indisponíveis.")
 
@@ -558,7 +560,7 @@ def renderizar_visao_cobertura():
         st.markdown("##### 2. Quebra Projetada")
         styler2 = gerar_styler_pivot('Quebra Projetada')
         if styler2:
-            st.dataframe(styler2, use_container_width=True, height=450)
+            st.dataframe(styler2, use_container_width=True)
         else:
             st.warning("Dados indisponíveis.")
 
@@ -566,7 +568,7 @@ def renderizar_visao_cobertura():
         st.markdown("##### 3. Quebra c/ Pipe Ops")
         styler3 = gerar_styler_pivot('Quebra Projetada c/ pipe Ops')
         if styler3:
-            st.dataframe(styler3, use_container_width=True, height=450)
+            st.dataframe(styler3, use_container_width=True)
         else:
             st.warning("Dados indisponíveis.")
 
