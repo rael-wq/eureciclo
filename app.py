@@ -16,7 +16,6 @@ st.set_page_config(
 )
 
 # Estilização CSS inspirada no portal principal da eureciclo (eureciclo.com.br)
-# Tabela HTML customizada sem nenhuma barra de rolagem (Scroll)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
@@ -99,36 +98,9 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0, 168, 89, 0.3) !important;
     }
 
-    /* Tabela HTML Customizada sem Scroll */
-    .tabela-pivot-container {
-        width: 100%;
-        overflow: hidden;
-        margin-bottom: 1rem;
-    }
-    .tabela-pivot {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.68rem;
-        font-family: 'Inter', sans-serif;
-    }
-    .tabela-pivot th {
-        background-color: #EDF2F7;
-        color: #2D3748;
-        font-weight: 600;
-        padding: 4px 2px;
-        text-align: center;
-        border: 1px solid #CBD5E0;
-    }
-    .tabela-pivot td {
-        padding: 3px 2px;
-        text-align: right;
-        border: 1px solid #E2E8F0;
-        font-size: 0.65rem;
-    }
-    .tabela-pivot td.col-uf {
-        text-align: center;
-        font-weight: 600;
-        background-color: #F7FAFC;
+    /* Ajuste de Tamanho de Fonte das Tabelas Nativas */
+    [data-testid="stDataFrame"] {
+        font-size: 0.72rem !important;
     }
 
     /* Dividers */
@@ -184,15 +156,17 @@ def converter_valor_num(val):
     except ValueError:
         return 0.0
 
-def obter_estilo_gradiente_css(val):
-    if not isinstance(val, (int, float)) or pd.isna(val) or val == 0:
-        return 'background-color: #FFFFFF; color: #A0AEC0;'
+def colorir_celula_quebra(val):
+    if not isinstance(val, (int, float)) or pd.isna(val):
+        return ''
     if val < 0:
         alpha = min(abs(val) / 30000, 1.0) * 0.45 + 0.1
         return f'background-color: rgba(229, 62, 62, {alpha:.2f}); color: #1E293B;'
-    else:
+    elif val > 0:
         alpha = min(val / 30000, 1.0) * 0.45 + 0.1
         return f'background-color: rgba(2, 132, 199, {alpha:.2f}); color: #1E293B;'
+    else:
+        return 'background-color: #FFFFFF; color: #A0AEC0;'
 
 # ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
@@ -534,14 +508,14 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS RENDERIZADAS EM HTML CUSTOMIZADO SEM NENHUM SCROLL
+    # TABELAS PIVOTEADAS EM ABAS (TABS) MANTENDO O COMPONENTE NATIVO ST.DATAFRAME COM RECURSOS COMPLETOS
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
         try: return f"{v:,.0f}".replace(",", ".")
         except: return v
 
-    def gerar_html_tabela_pivot(coluna_metrica):
+    def gerar_styler_pivot(coluna_metrica):
         if coluna_metrica in df_filtrado.columns and 'UF' in df_filtrado.columns and 'material' in df_filtrado.columns:
             pivot_df = df_filtrado.pivot_table(
                 index='UF', 
@@ -550,26 +524,22 @@ def renderizar_visao_cobertura():
                 aggfunc='sum', 
                 fill_value=0
             )
-            # Soma apenas dos valores negativos da linha
+            # Coluna de Total considerando APENAS os valores negativos da linha
             pivot_df['Total Negativo'] = pivot_df.apply(lambda row: row[row < 0].sum(), axis=1)
             
-            html = ['<div class="tabela-pivot-container"><table class="tabela-pivot"><thead><tr><th>UF</th>']
-            for col in pivot_df.columns:
-                html.append(f'<th>{col}</th>')
-            html.append('</tr></thead><tbody>')
+            fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
             
-            for uf, row in pivot_df.iterrows():
-                html.append(f'<tr><td class="col-uf">{uf}</td>')
-                for col_val in row:
-                    estilo = obter_estilo_gradiente_css(col_val)
-                    val_str = formatar_numero_br(col_val)
-                    html.append(f'<td style="{estilo}">{val_str}</td>')
-                html.append('</tr>')
-            html.append('</tbody></table></div>')
-            return "".join(html)
-        return "<p>Dados indisponíveis.</p>"
+            styler_obj = pivot_df.style.format(fmt_dict)
+            if hasattr(styler_obj, "map"):
+                styler = styler_obj.map(colorir_celula_quebra)
+            else:
+                styler = styler_obj.applymap(colorir_celula_quebra)
+            
+            return styler
+        return None
 
-    # Renderização em 3 Abas (Tabs) para caberem com 100% de clareza sem espremer ou gerar scroll
+    # Abas para garantir que as tabelas nativas st.dataframe fiquem com 100% da largura da tela,
+    # permitindo ordenação nas colunas, busca, tela cheia e sem comprimir os dados.
     tab1, tab2, tab3 = st.tabs([
         "1. Quebra Atual", 
         "2. Quebra Projetada", 
@@ -577,13 +547,25 @@ def renderizar_visao_cobertura():
     ])
 
     with tab1:
-        st.markdown(gerar_html_tabela_pivot('Quebra Atual'), unsafe_allow_html=True)
+        styler1 = gerar_styler_pivot('Quebra Atual')
+        if styler1:
+            st.dataframe(styler1, use_container_width=True)
+        else:
+            st.warning("Dados indisponíveis.")
 
     with tab2:
-        st.markdown(gerar_html_tabela_pivot('Quebra Projetada'), unsafe_allow_html=True)
+        styler2 = gerar_styler_pivot('Quebra Projetada')
+        if styler2:
+            st.dataframe(styler2, use_container_width=True)
+        else:
+            st.warning("Dados indisponíveis.")
 
     with tab3:
-        st.markdown(gerar_html_tabela_pivot('Quebra Projetada c/ pipe Ops'), unsafe_allow_html=True)
+        styler3 = gerar_styler_pivot('Quebra Projetada c/ pipe Ops')
+        if styler3:
+            st.dataframe(styler3, use_container_width=True)
+        else:
+            st.warning("Dados indisponíveis.")
 
     st.divider()
 
