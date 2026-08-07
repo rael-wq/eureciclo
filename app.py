@@ -128,7 +128,7 @@ PALETA_EURECICLO = {
 LOGO_EURECICLO_URL = "https://pages.greatpages.com.br/lp.bowe.com.br-lp-eu-logistica/1782305795/imagens/desktop/3604298_1_17823057706a3bd3ea90543409291793.svg"
 
 # ==========================================
-# FUNÇÃO AUXILIAR DE TRATAMENTO NUMÉRICO
+# FUNÇÕES AUXILIARES DE TRATAMENTO E ESTILO
 # ==========================================
 def converter_valor_num(val):
     if pd.isna(val):
@@ -147,6 +147,21 @@ def converter_valor_num(val):
         return float(s_clean)
     except ValueError:
         return 0.0
+
+# Função de Mapa de Calor customizada (Sem dependência de matplotlib)
+def colorir_celula_quebra(val):
+    if not isinstance(val, (int, float)) or pd.isna(val):
+        return ''
+    if val < 0:
+        # Intensidade do vermelho baseada na escala do valor negativo
+        alpha = min(abs(val) / 30000, 1.0) * 0.45 + 0.1
+        return f'background-color: rgba(229, 62, 62, {alpha:.2f}); color: #1E293B;'
+    elif val > 0:
+        # Intensidade do azul para valores positivos
+        alpha = min(val / 30000, 1.0) * 0.45 + 0.1
+        return f'background-color: rgba(2, 132, 199, {alpha:.2f}); color: #1E293B;'
+    else:
+        return 'background-color: #FFFFFF; color: #A0AEC0;'
 
 # ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
@@ -489,14 +504,13 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS DAS 3 QUEBRAS (UF x MATERIAL) COM MAPA DE CALOR
+    # TABELAS PIVOTEADAS DAS 3 QUEBRAS (UF x MATERIAL) COM MAPA DE CALOR CUSTOMIZADO
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
         try: return f"{v:,.0f}".replace(",", ".")
         except: return v
 
-    # Função para gerar tabelas pivoteadas com mapa de calor (Vermelho = Mais Negativo, Azul = Positivo)
     def criar_tabela_pivot_quebra(coluna_metrica, titulo):
         st.markdown(f"##### {titulo}")
         if coluna_metrica in df_filtrado.columns and 'UF' in df_filtrado.columns and 'material' in df_filtrado.columns:
@@ -513,17 +527,14 @@ def renderizar_visao_cobertura():
             # Formatação numérica BR
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
             
-            # Aplica o mapa de calor em gradiente divergente (RdBu: Vermelho -> Branco -> Azul)
-            styler = pivot_df.style.format(fmt_dict).background_gradient(
-                cmap='RdBu', 
-                axis=None
-            )
+            # Aplica estilização de mapa de calor nativa sem dependência do matplotlib
+            styler = pivot_df.style.format(fmt_dict).applymap(colorir_celula_quebra)
             
             st.dataframe(styler, use_container_width=True)
         else:
             st.warning(f"Não foi possível gerar a tabela de {titulo}.")
 
-    # Exibição das 3 tabelas de quebra com gradiente
+    # Exibição das 3 tabelas de quebra com gradiente CSS
     criar_tabela_pivot_quebra('Quebra Atual', '1. Quebra Atual por UF x Material')
     criar_tabela_pivot_quebra('Quebra Projetada', '2. Quebra Projetada por UF x Material')
     criar_tabela_pivot_quebra('Quebra Projetada c/ pipe Ops', '3. Quebra Projetada c/ Pipe Ops por UF x Material')
