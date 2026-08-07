@@ -16,13 +16,6 @@ st.set_page_config(
 )
 
 # Estilização CSS inspirada no portal principal da eureciclo (eureciclo.com.br)
-# Paleta de cores:
-# - Verde Primário: #00A859
-# - Verde Escuro (Acentos): #007A40
-# - Azul Secundário: #0B3C5D / #0284C7
-# - Background Claro: #FAFAFA / #FFFFFF
-# - Texto Primário: #2D3748
-# - Fontes: 'Montserrat', 'Inter', sans-serif
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
@@ -108,7 +101,6 @@ st.markdown("""
 
 COLUNAS_NUMERICAS_DEMANDA = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
 
-# Colunas numéricas da aba Cobertura (sem colunas de Oferta para exibição limpa)
 COLUNAS_EXIBICAO_COBERTURA = [
     'UF', 'material', 'SKU', 'Ano Base',
     'Demanda Atual', 'Demanda Projetada', 'Demanda TOTAL', 
@@ -120,7 +112,6 @@ COLUNAS_NUMERICAS_COBERTURA = [
     'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops'
 ]
 
-# Paleta de Cores do Portal eureciclo
 PALETA_EURECICLO = {
     'Compensada': '#00A859',        # Verde eureciclo
     'Em Aberto': '#FF5A5F',         # Coral
@@ -131,7 +122,6 @@ PALETA_EURECICLO = {
     'Verde_Escala': ['#E6F4EA', '#A3E0BF', '#42C785', '#00A859', '#007A40']
 }
 
-# Logo Oficial eureciclo
 LOGO_EURECICLO_URL = "https://pages.greatpages.com.br/lp.bowe.com.br-lp-eu-logistica/1782305795/imagens/desktop/3604298_1_17823057706a3bd3ea90543409291793.svg"
 
 # ==========================================
@@ -180,7 +170,6 @@ def check_login():
             st.error(f"❌ Acesso negado: {st.session_state['user_email']} não autorizado.")
             return False
 
-    # Exibição do logo acima da seção de login
     st.image(LOGO_EURECICLO_URL, width=220)
     st.markdown("### 🔒 Acesso Restrito - Portal eureciclo")
     st.markdown("Faça login com sua conta corporativa `@nhecotech.com` para visualizar o dashboard.")
@@ -236,7 +225,7 @@ st.sidebar.divider()
 @st.cache_data(ttl=600)
 def carregar_dados_demanda():
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df_raw = conn.read(worksheet="[DASH] Demanda", skiprows=4)
+    df_raw = conn.read(worksheet="[Demanda] Visão Gerencial", skiprows=4)
     
     if 'SKU' in df_raw.columns:
         idx_sku = df_raw.columns.get_loc('SKU')
@@ -496,33 +485,39 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # GRÁFICOS VISÃO COBERTURA
-    st.subheader("Análise Visual de Quebras")
-    col_g1, col_g2 = st.columns(2)
+    # TABELAS PIVOTEADAS DAS 3 QUEBRAS (UF x MATERIAL)
+    st.subheader("Análise Detalhada das Quebras por UF e Material")
 
-    with col_g1:
-        df_uf_quebra = df_filtrado.groupby('UF', as_index=False)['Quebra Projetada'].sum().sort_values('Quebra Projetada', ascending=True)
-        fig_uf_quebra = px.bar(
-            df_uf_quebra, x='UF', y='Quebra Projetada', 
-            title="Quebra Projetada por UF", 
-            color='Quebra Projetada', 
-            color_continuous_scale=['#E53E3E', '#DD6B20', '#ECC94B']
-        )
-        fig_uf_quebra.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
-        fig_uf_quebra.update_layout(separators=".,", yaxis_tickformat=",.0f", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(family="Inter, sans-serif"))
-        st.plotly_chart(fig_uf_quebra, use_container_width=True)
+    def formatar_numero_br(v):
+        try: return f"{v:,.0f}".replace(",", ".")
+        except: return v
 
-    with col_g2:
-        df_mat_quebra = df_filtrado.groupby('material', as_index=False)['Quebra Projetada'].sum()
-        df_mat_quebra['Abs_Quebra'] = df_mat_quebra['Quebra Projetada'].abs()
-        fig_mat_quebra = px.pie(
-            df_mat_quebra, values='Abs_Quebra', names='material', 
-            title="Distribuição da Quebra Projetada por Material", hole=0.4,
-            color_discrete_sequence=['#E53E3E', '#DD6B20', '#D69E2E', '#0284C7']
-        )
-        fig_mat_quebra.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="%{label}: %{value:,.0f}<extra></extra>")
-        fig_mat_quebra.update_layout(separators=".,", paper_bgcolor="rgba(0,0,0,0)", font=dict(family="Inter, sans-serif"))
-        st.plotly_chart(fig_mat_quebra, use_container_width=True)
+    # Função para gerar tabelas pivoteadas por UF x Material
+    def criar_tabela_pivot_quebra(coluna_metrica, titulo):
+        st.markdown(f"##### {titulo}")
+        if coluna_metrica in df_filtrado.columns and 'UF' in df_filtrado.columns and 'material' in df_filtrado.columns:
+            pivot_df = df_filtrado.pivot_table(
+                index='UF', 
+                columns='material', 
+                values=coluna_metrica, 
+                aggfunc='sum', 
+                fill_value=0
+            )
+            # Adiciona coluna de Total
+            pivot_df['Total'] = pivot_df.sum(axis=1)
+            
+            # Formatação numérica brasileira
+            fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
+            st.dataframe(pivot_df.style.format(fmt_dict), use_container_width=True)
+        else:
+            st.warning(f"Não foi possível gerar a tabela de {titulo}.")
+
+    # Exibição das 3 tabelas de quebra
+    criar_tabela_pivot_quebra('Quebra Atual', '1. Quebra Atual por UF x Material')
+    criar_tabela_pivot_quebra('Quebra Projetada', '2. Quebra Projetada por UF x Material')
+    criar_tabela_pivot_quebra('Quebra Projetada c/ pipe Ops', '3. Quebra Projetada c/ Pipe Ops por UF x Material')
+
+    st.divider()
 
     st.markdown("#### Composição das Quebras por UF e SKU")
     opcoes_quebra = ['Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops']
@@ -589,10 +584,6 @@ def renderizar_visao_cobertura():
     with st.expander("Ver Dados Detalhados de Quebras"):
         cols_presentes = [c for c in COLUNAS_EXIBICAO_COBERTURA if c in df_filtrado.columns]
         df_tabela_cob = df_filtrado[cols_presentes].copy()
-
-        def formatar_numero_br(v):
-            try: return f"{v:,.0f}".replace(",", ".")
-            except: return v
 
         formato_dict_cob = {col: formatar_numero_br for col in COLUNAS_NUMERICAS_COBERTURA if col in df_tabela_cob.columns}
         st.dataframe(df_tabela_cob.style.format(formato_dict_cob), use_container_width=True)
