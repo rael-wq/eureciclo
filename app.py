@@ -463,7 +463,7 @@ def renderizar_visao_cobertura():
         st.rerun()
 
     # CÁLCULOS DOS KPIs E % DE QUEBRAS EM RELAÇÃO À DEMANDA TOTAL
-    total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
+    total_demanda_cob = df_filtrado['Demanda a Compensar'].sum()
     total_quebra_atual = df_filtrado['Quebra Atual'].sum()
     total_quebra_proj = df_filtrado['Quebra Projetada'].sum()
     total_quebra_pipe = df_filtrado['Quebra Projetada c/ pipe Ops'].sum()
