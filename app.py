@@ -101,6 +101,7 @@ st.markdown("""
 
 COLUNAS_NUMERICAS_DEMANDA = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
 
+# Colunas numéricas da aba Cobertura (sem colunas de Oferta para exibição limpa)
 COLUNAS_EXIBICAO_COBERTURA = [
     'UF', 'material', 'SKU', 'Ano Base',
     'Demanda Atual', 'Demanda Projetada', 'Demanda TOTAL', 
@@ -112,6 +113,7 @@ COLUNAS_NUMERICAS_COBERTURA = [
     'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops'
 ]
 
+# Paleta de Cores do Portal eureciclo
 PALETA_EURECICLO = {
     'Compensada': '#00A859',        # Verde eureciclo
     'Em Aberto': '#FF5A5F',         # Coral
@@ -122,6 +124,7 @@ PALETA_EURECICLO = {
     'Verde_Escala': ['#E6F4EA', '#A3E0BF', '#42C785', '#00A859', '#007A40']
 }
 
+# Logo Oficial eureciclo
 LOGO_EURECICLO_URL = "https://pages.greatpages.com.br/lp.bowe.com.br-lp-eu-logistica/1782305795/imagens/desktop/3604298_1_17823057706a3bd3ea90543409291793.svg"
 
 # ==========================================
@@ -170,6 +173,7 @@ def check_login():
             st.error(f"❌ Acesso negado: {st.session_state['user_email']} não autorizado.")
             return False
 
+    # Exibição do logo no topo antes da área de login
     st.image(LOGO_EURECICLO_URL, width=220)
     st.markdown("### 🔒 Acesso Restrito - Portal eureciclo")
     st.markdown("Faça login com sua conta corporativa `@nhecotech.com` para visualizar o dashboard.")
@@ -485,14 +489,14 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS DAS 3 QUEBRAS (UF x MATERIAL)
+    # TABELAS PIVOTEADAS DAS 3 QUEBRAS (UF x MATERIAL) COM MAPA DE CALOR
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
         try: return f"{v:,.0f}".replace(",", ".")
         except: return v
 
-    # Função para gerar tabelas pivoteadas por UF x Material
+    # Função para gerar tabelas pivoteadas com mapa de calor (Vermelho = Mais Negativo, Azul = Positivo)
     def criar_tabela_pivot_quebra(coluna_metrica, titulo):
         st.markdown(f"##### {titulo}")
         if coluna_metrica in df_filtrado.columns and 'UF' in df_filtrado.columns and 'material' in df_filtrado.columns:
@@ -506,13 +510,20 @@ def renderizar_visao_cobertura():
             # Adiciona coluna de Total
             pivot_df['Total'] = pivot_df.sum(axis=1)
             
-            # Formatação numérica brasileira
+            # Formatação numérica BR
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
-            st.dataframe(pivot_df.style.format(fmt_dict), use_container_width=True)
+            
+            # Aplica o mapa de calor em gradiente divergente (RdBu: Vermelho -> Branco -> Azul)
+            styler = pivot_df.style.format(fmt_dict).background_gradient(
+                cmap='RdBu', 
+                axis=None
+            )
+            
+            st.dataframe(styler, use_container_width=True)
         else:
             st.warning(f"Não foi possível gerar a tabela de {titulo}.")
 
-    # Exibição das 3 tabelas de quebra
+    # Exibição das 3 tabelas de quebra com gradiente
     criar_tabela_pivot_quebra('Quebra Atual', '1. Quebra Atual por UF x Material')
     criar_tabela_pivot_quebra('Quebra Projetada', '2. Quebra Projetada por UF x Material')
     criar_tabela_pivot_quebra('Quebra Projetada c/ pipe Ops', '3. Quebra Projetada c/ Pipe Ops por UF x Material')
