@@ -463,7 +463,7 @@ def renderizar_visao_cobertura():
         st.rerun()
 
     # CÁLCULOS DOS KPIs E % DE QUEBRAS EM RELAÇÃO À DEMANDA TOTAL
-    total_demanda_cob = df_filtrado['Demanda a Compensar'].sum()
+    total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
     total_quebra_atual = df_filtrado['Quebra Atual'].sum()
     total_quebra_proj = df_filtrado['Quebra Projetada'].sum()
     total_quebra_pipe = df_filtrado['Quebra Projetada c/ pipe Ops'].sum()
@@ -474,7 +474,7 @@ def renderizar_visao_cobertura():
 
     st.subheader("Indicadores Chave de Quebra (KPIs)")
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-    kpi1.metric("Demanda TOTAL", f"{total_demanda_cob:,.0f}".replace(",", "."))
+    kpi1.metric("Demanda a Compensar", f"{total_demanda_cob:,.0f}".replace(",", "."))
     kpi2.metric(
         "Quebra Atual", 
         f"{total_quebra_atual:,.0f}".replace(",", "."), 
