@@ -101,7 +101,6 @@ st.markdown("""
 
 COLUNAS_NUMERICAS_DEMANDA = ['Compensada', 'Em Aberto', 'Total Contratada', 'Projetada', 'Em aberto + Projetada', 'DEMANDA TOTAL']
 
-# Colunas numéricas da aba Cobertura (sem colunas de Oferta para exibição limpa)
 COLUNAS_EXIBICAO_COBERTURA = [
     'UF', 'material', 'SKU', 'Ano Base',
     'Demanda Atual', 'Demanda Projetada', 'Demanda TOTAL', 
@@ -113,7 +112,6 @@ COLUNAS_NUMERICAS_COBERTURA = [
     'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops'
 ]
 
-# Paleta de Cores do Portal eureciclo
 PALETA_EURECICLO = {
     'Compensada': '#00A859',        # Verde eureciclo
     'Em Aberto': '#FF5A5F',         # Coral
@@ -124,7 +122,6 @@ PALETA_EURECICLO = {
     'Verde_Escala': ['#E6F4EA', '#A3E0BF', '#42C785', '#00A859', '#007A40']
 }
 
-# Logo Oficial eureciclo
 LOGO_EURECICLO_URL = "https://pages.greatpages.com.br/lp.bowe.com.br-lp-eu-logistica/1782305795/imagens/desktop/3604298_1_17823057706a3bd3ea90543409291793.svg"
 
 # ==========================================
@@ -148,16 +145,13 @@ def converter_valor_num(val):
     except ValueError:
         return 0.0
 
-# Função de Mapa de Calor customizada (Sem dependência de matplotlib)
 def colorir_celula_quebra(val):
     if not isinstance(val, (int, float)) or pd.isna(val):
         return ''
     if val < 0:
-        # Intensidade do vermelho baseada na escala do valor negativo
         alpha = min(abs(val) / 30000, 1.0) * 0.45 + 0.1
         return f'background-color: rgba(229, 62, 62, {alpha:.2f}); color: #1E293B;'
     elif val > 0:
-        # Intensidade do azul para valores positivos
         alpha = min(val / 30000, 1.0) * 0.45 + 0.1
         return f'background-color: rgba(2, 132, 199, {alpha:.2f}); color: #1E293B;'
     else:
@@ -188,7 +182,6 @@ def check_login():
             st.error(f"❌ Acesso negado: {st.session_state['user_email']} não autorizado.")
             return False
 
-    # Exibição do logo no topo antes da área de login
     st.image(LOGO_EURECICLO_URL, width=220)
     st.markdown("### 🔒 Acesso Restrito - Portal eureciclo")
     st.markdown("Faça login com sua conta corporativa `@nhecotech.com` para visualizar o dashboard.")
@@ -504,7 +497,7 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS DAS 3 QUEBRAS (UF x MATERIAL) COM MAPA DE CALOR CUSTOMIZADO
+    # TABELAS PIVOTEADAS DAS 3 QUEBRAS (UF x MATERIAL)
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
@@ -521,20 +514,20 @@ def renderizar_visao_cobertura():
                 aggfunc='sum', 
                 fill_value=0
             )
-            # Adiciona coluna de Total
             pivot_df['Total'] = pivot_df.sum(axis=1)
-            
-            # Formatação numérica BR
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
             
-            # Aplica estilização de mapa de calor nativa sem dependência do matplotlib
-            styler = pivot_df.style.format(fmt_dict).applymap(colorir_celula_quebra)
+            # Compatibilidade Pandas (Pandas <2.1 style.applymap / Pandas 2.1+ style.map)
+            styler_obj = pivot_df.style.format(fmt_dict)
+            if hasattr(styler_obj, "map"):
+                styler = styler_obj.map(colorir_celula_quebra)
+            else:
+                styler = styler_obj.applymap(colorir_celula_quebra)
             
             st.dataframe(styler, use_container_width=True)
         else:
             st.warning(f"Não foi possível gerar a tabela de {titulo}.")
 
-    # Exibição das 3 tabelas de quebra com gradiente CSS
     criar_tabela_pivot_quebra('Quebra Atual', '1. Quebra Atual por UF x Material')
     criar_tabela_pivot_quebra('Quebra Projetada', '2. Quebra Projetada por UF x Material')
     criar_tabela_pivot_quebra('Quebra Projetada c/ pipe Ops', '3. Quebra Projetada c/ Pipe Ops por UF x Material')
