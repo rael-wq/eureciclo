@@ -485,13 +485,14 @@ def renderizar_visao_cobertura():
         st.cache_data.clear()
         st.rerun()
 
-    # 2. Dataset estritamente negativo para KPIs e Gráficos
+    # 2. Dataset ESTRITAMENTE NEGATIVO para KPIs e Gráficos
+    # Força o teto zero (clip upper=0.0) em todas as 6 colunas de quebra
     df_quebras_negativas = df_filtrado.copy()
     for q_col in COLUNAS_QUEBRAS_TODAS:
         if q_col in df_quebras_negativas.columns:
-            df_quebras_negativas[q_col] = df_quebras_negativas[q_col].apply(lambda x: float(x) if float(x) < 0 else 0.0)
+            df_quebras_negativas[q_col] = pd.to_numeric(df_quebras_negativas[q_col], errors='coerce').fillna(0.0).clip(upper=0.0)
 
-    # CÁLCULOS DOS KPIs (VALORES NEGATIVOS EXCLUSIVOS)
+    # CÁLCULOS DOS KPIs (VALORES NEGATIVOS EXCLUSIVOS DO DF_QUEBRAS_NEGATIVAS)
     total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
     
     total_quebra_atual = df_quebras_negativas['Quebra Atual'].sum()
@@ -558,7 +559,7 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS EM ABAS (TABS) - SOMAM POSITIVOS E NEGATIVOS
+    # TABELAS PIVOTEADAS EM ABAS (TABS) - SOMAM POSITIVOS E NEGATIVOS (DF_FILTRADO ORIGINAL)
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
@@ -659,7 +660,7 @@ def renderizar_visao_cobertura():
             'Quebra Projetada c/ pipe Ops (report)': PALETA_EURECICLO['Quebra Projetada c/ pipe Ops (report)']
         }
 
-        # 1. COMPOSIÇÃO DE QUEBRA POR UF (UTILIZA APENAS OS VALORES NEGATIVOS DO DF_QUEBRAS_NEGATIVAS)
+        # 1. COMPOSIÇÃO DE QUEBRA POR UF (ITEM 1 - UTILIZA DF_QUEBRAS_NEGATIVAS)
         df_composicao_uf_quebra = df_quebras_negativas.groupby('UF', as_index=False)[quebras_grafico].sum()
         df_composicao_uf_quebra['UF'] = df_composicao_uf_quebra['UF'].astype(str)
         df_uf_melted_quebra = df_composicao_uf_quebra.melt(id_vars=['UF'], value_vars=quebras_grafico, var_name='Tipo de Quebra', value_name='Valor')
@@ -677,20 +678,24 @@ def renderizar_visao_cobertura():
         )
         st.plotly_chart(fig_comp_uf_quebra, use_container_width=True)
 
-        # 2. COMPOSIÇÃO DE QUEBRA POR SKU (UTILIZA APENAS OS VALORES NEGATIVOS DO DF_QUEBRAS_NEGATIVAS)
-        df_composicao_sku_quebra = df_quebras_negativas.groupby('SKU', as_index=False)[quebras_grafico].sum()
-        df_composicao_sku_quebra['Total_Quebra'] = df_composicao_sku_quebra[quebras_grafico].sum(axis=1)
-        df_composicao_sku_quebra = df_composicao_sku_quebra.sort_values(by='Total_Quebra', ascending=True)
+        # 2. COMPOSIÇÃO DE QUEBRA POR SKU (ITEM 2 - UTILIZA DF_QUEBRAS_NEGATIVAS COM CLIP ESTRITO ENFORCADO)
+        # Isola os SKUs e trunca estritamente no teto 0.0
+        df_sku_base = df_quebras_negativas.groupby('SKU', as_index=False)[quebras_grafico].sum()
+        for q_col in quebras_grafico:
+            df_sku_base[q_col] = df_sku_base[q_col].clip(upper=0.0)
 
-        if len(df_composicao_sku_quebra) > 20:
-            df_top20_quebra = df_composicao_sku_quebra.iloc[:20].copy()
-            df_demais_quebra = df_composicao_sku_quebra.iloc[20:].copy()
+        df_sku_base['Total_Quebra'] = df_sku_base[quebras_grafico].sum(axis=1)
+        df_sku_base = df_sku_base.sort_values(by='Total_Quebra', ascending=True)
+
+        if len(df_sku_base) > 20:
+            df_top20_quebra = df_sku_base.iloc[:20].copy()
+            df_demais_quebra = df_sku_base.iloc[20:].copy()
             dict_demais_quebra = {'SKU': 'Demais SKUs', 'Total_Quebra': df_demais_quebra['Total_Quebra'].sum()}
             for q_col in quebras_grafico:
                 dict_demais_quebra[q_col] = df_demais_quebra[q_col].sum()
             df_final_sku_quebra = pd.concat([df_top20_quebra, pd.DataFrame([dict_demais_quebra])], ignore_index=True)
         else:
-            df_final_sku_quebra = df_composicao_sku_quebra.copy()
+            df_final_sku_quebra = df_sku_base.copy()
 
         df_final_sku_quebra['SKU'] = df_final_sku_quebra['SKU'].astype(str)
         ordem_y_quebra = df_final_sku_quebra['SKU'].tolist()[::-1]
