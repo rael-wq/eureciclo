@@ -125,6 +125,11 @@ COLUNAS_NUMERICAS_COBERTURA = [
     'Quebra Atual (report)', 'Quebra Projetada (report)', 'Quebra Projetada c/ pipe Ops (report)'
 ]
 
+COLUNAS_QUEBRAS_TODAS = [
+    'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops',
+    'Quebra Atual (report)', 'Quebra Projetada (report)', 'Quebra Projetada c/ pipe Ops (report)'
+]
+
 PALETA_EURECICLO = {
     'Compensada': '#00A859',                    # Verde eureciclo
     'Em Aberto': '#FF5A5F',                     # Coral
@@ -172,9 +177,6 @@ def colorir_celula_quebra(val):
         return f'background-color: rgba(2, 132, 199, {alpha:.2f}); color: #1E293B;'
     else:
         return 'background-color: #FFFFFF; color: #A0AEC0;'
-
-def somar_apenas_negativos(series):
-    return series[series < 0].sum()
 
 # ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
@@ -482,16 +484,22 @@ def renderizar_visao_cobertura():
         st.cache_data.clear()
         st.rerun()
 
-    # CÁLCULOS DOS KPIs (SOMANDO ESTRITAMENTE APENAS VALORES NEGATIVOS DE QUEBRA)
+    # REGRA CRÍTICA: ZERAR QUALQUER VALOR POSITIVO OU NULO NAS MÉTRICAS DE QUEBRA
+    # Garante que NENHUM VALOR POSITIVO seja somado nos KPIs, tabelas ou gráficos
+    for q_col in COLUNAS_QUEBRAS_TODAS:
+        if q_col in df_filtrado.columns:
+            df_filtrado[q_col] = df_filtrado[q_col].apply(lambda x: x if x < 0 else 0.0)
+
+    # CÁLCULOS DOS KPIs
     total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
     
-    total_quebra_atual = df_filtrado[df_filtrado['Quebra Atual'] < 0]['Quebra Atual'].sum()
-    total_quebra_proj = df_filtrado[df_filtrado['Quebra Projetada'] < 0]['Quebra Projetada'].sum()
-    total_quebra_pipe = df_filtrado[df_filtrado['Quebra Projetada c/ pipe Ops'] < 0]['Quebra Projetada c/ pipe Ops'].sum()
+    total_quebra_atual = df_filtrado['Quebra Atual'].sum()
+    total_quebra_proj = df_filtrado['Quebra Projetada'].sum()
+    total_quebra_pipe = df_filtrado['Quebra Projetada c/ pipe Ops'].sum()
 
-    total_quebra_atual_rep = df_filtrado[df_filtrado['Quebra Atual (report)'] < 0]['Quebra Atual (report)'].sum() if 'Quebra Atual (report)' in df_filtrado.columns else 0
-    total_quebra_proj_rep = df_filtrado[df_filtrado['Quebra Projetada (report)'] < 0]['Quebra Projetada (report)'].sum() if 'Quebra Projetada (report)' in df_filtrado.columns else 0
-    total_quebra_pipe_rep = df_filtrado[df_filtrado['Quebra Projetada c/ pipe Ops (report)'] < 0]['Quebra Projetada c/ pipe Ops (report)'].sum() if 'Quebra Projetada c/ pipe Ops (report)' in df_filtrado.columns else 0
+    total_quebra_atual_rep = df_filtrado['Quebra Atual (report)'].sum() if 'Quebra Atual (report)' in df_filtrado.columns else 0
+    total_quebra_proj_rep = df_filtrado['Quebra Projetada (report)'].sum() if 'Quebra Projetada (report)' in df_filtrado.columns else 0
+    total_quebra_pipe_rep = df_filtrado['Quebra Projetada c/ pipe Ops (report)'].sum() if 'Quebra Projetada c/ pipe Ops (report)' in df_filtrado.columns else 0
 
     pct_quebra_atual = (total_quebra_atual / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
     pct_quebra_proj = (total_quebra_proj / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
@@ -549,7 +557,7 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS EM ABAS (TABS) COM SOMA ESTRITAMENTE DE NEGATIVOS NA AGREGAÇÃO
+    # TABELAS PIVOTEADAS EM ABAS (TABS)
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
@@ -558,16 +566,15 @@ def renderizar_visao_cobertura():
 
     def gerar_styler_pivot(coluna_metrica):
         if coluna_metrica in df_filtrado.columns and 'UF' in df_filtrado.columns and 'material' in df_filtrado.columns:
-            # Pivot com aggfunc customizado para considerar apenas valores negativos ao agrupar
             pivot_df = df_filtrado.pivot_table(
                 index='UF', 
                 columns='material', 
                 values=coluna_metrica, 
-                aggfunc=somar_apenas_negativos, 
+                aggfunc='sum', 
                 fill_value=0
             )
             # Coluna de Total considerando APENAS os valores negativos da linha
-            pivot_df['Total Negativo'] = pivot_df.apply(lambda row: row[row < 0].sum(), axis=1)
+            pivot_df['Total Negativo'] = pivot_df.sum(axis=1)
             
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
             
@@ -649,14 +656,8 @@ def renderizar_visao_cobertura():
             'Quebra Projetada c/ pipe Ops (report)': PALETA_EURECICLO['Quebra Projetada c/ pipe Ops (report)']
         }
 
-        # Preparação dos dados para gráficos: Filtra SOMENTE valores negativos (< 0)
-        df_graficos_quebra = df_filtrado.copy()
-        for q_col in quebras_grafico:
-            if q_col in df_graficos_quebra.columns:
-                df_graficos_quebra[q_col] = df_graficos_quebra[q_col].apply(lambda x: x if x < 0 else 0)
-
         # 1. COMPOSIÇÃO DE QUEBRA POR UF (COLUNAS VERTICAIS EMPILHADAS - SOMENTE DÉFICITS NEGATIVOS)
-        df_composicao_uf_quebra = df_graficos_quebra.groupby('UF', as_index=False)[quebras_grafico].sum()
+        df_composicao_uf_quebra = df_filtrado.groupby('UF', as_index=False)[quebras_grafico].sum()
         df_composicao_uf_quebra['UF'] = df_composicao_uf_quebra['UF'].astype(str)
         df_uf_melted_quebra = df_composicao_uf_quebra.melt(id_vars=['UF'], value_vars=quebras_grafico, var_name='Tipo de Quebra', value_name='Valor')
 
@@ -674,7 +675,7 @@ def renderizar_visao_cobertura():
         st.plotly_chart(fig_comp_uf_quebra, use_container_width=True)
 
         # 2. COMPOSIÇÃO DE QUEBRA POR SKU (BARRAS HORIZONTAIS EMPILHADAS TOP 20 + DEMAIS SKUS - SOMENTE DÉFICITS NEGATIVOS)
-        df_composicao_sku_quebra = df_graficos_quebra.groupby('SKU', as_index=False)[quebras_grafico].sum()
+        df_composicao_sku_quebra = df_filtrado.groupby('SKU', as_index=False)[quebras_grafico].sum()
         df_composicao_sku_quebra['Total_Quebra'] = df_composicao_sku_quebra[quebras_grafico].sum(axis=1)
         df_composicao_sku_quebra = df_composicao_sku_quebra.sort_values(by='Total_Quebra', ascending=True)
 
