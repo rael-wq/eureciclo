@@ -173,6 +173,9 @@ def colorir_celula_quebra(val):
     else:
         return 'background-color: #FFFFFF; color: #A0AEC0;'
 
+def somar_apenas_negativos(series):
+    return series[series < 0].sum()
+
 # ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
 # ==========================================
@@ -479,7 +482,7 @@ def renderizar_visao_cobertura():
         st.cache_data.clear()
         st.rerun()
 
-    # CÁLCULOS DOS KPIs (SOMANDO APENAS VALORES NEGATIVOS DE QUEBRA)
+    # CÁLCULOS DOS KPIs (SOMANDO ESTRITAMENTE APENAS VALORES NEGATIVOS DE QUEBRA)
     total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
     
     total_quebra_atual = df_filtrado[df_filtrado['Quebra Atual'] < 0]['Quebra Atual'].sum()
@@ -546,7 +549,7 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS EM ABAS (TABS)
+    # TABELAS PIVOTEADAS EM ABAS (TABS) COM SOMA ESTRITAMENTE DE NEGATIVOS NA AGREGAÇÃO
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
@@ -555,11 +558,12 @@ def renderizar_visao_cobertura():
 
     def gerar_styler_pivot(coluna_metrica):
         if coluna_metrica in df_filtrado.columns and 'UF' in df_filtrado.columns and 'material' in df_filtrado.columns:
+            # Pivot com aggfunc customizado para considerar apenas valores negativos ao agrupar
             pivot_df = df_filtrado.pivot_table(
                 index='UF', 
                 columns='material', 
                 values=coluna_metrica, 
-                aggfunc='sum', 
+                aggfunc=somar_apenas_negativos, 
                 fill_value=0
             )
             # Coluna de Total considerando APENAS os valores negativos da linha
@@ -651,7 +655,7 @@ def renderizar_visao_cobertura():
             if q_col in df_graficos_quebra.columns:
                 df_graficos_quebra[q_col] = df_graficos_quebra[q_col].apply(lambda x: x if x < 0 else 0)
 
-        # 1. COMPOSIÇÃO DE QUEBRA POR UF (COLUNAS VERTICAIS EMPILHADAS - VALORES NEGATIVOS)
+        # 1. COMPOSIÇÃO DE QUEBRA POR UF (COLUNAS VERTICAIS EMPILHADAS - SOMENTE DÉFICITS NEGATIVOS)
         df_composicao_uf_quebra = df_graficos_quebra.groupby('UF', as_index=False)[quebras_grafico].sum()
         df_composicao_uf_quebra['UF'] = df_composicao_uf_quebra['UF'].astype(str)
         df_uf_melted_quebra = df_composicao_uf_quebra.melt(id_vars=['UF'], value_vars=quebras_grafico, var_name='Tipo de Quebra', value_name='Valor')
@@ -669,7 +673,7 @@ def renderizar_visao_cobertura():
         )
         st.plotly_chart(fig_comp_uf_quebra, use_container_width=True)
 
-        # 2. COMPOSIÇÃO DE QUEBRA POR SKU (BARRAS HORIZONTAIS EMPILHADAS TOP 20 + DEMAIS SKUS - VALORES NEGATIVOS)
+        # 2. COMPOSIÇÃO DE QUEBRA POR SKU (BARRAS HORIZONTAIS EMPILHADAS TOP 20 + DEMAIS SKUS - SOMENTE DÉFICITS NEGATIVOS)
         df_composicao_sku_quebra = df_graficos_quebra.groupby('SKU', as_index=False)[quebras_grafico].sum()
         df_composicao_sku_quebra['Total_Quebra'] = df_composicao_sku_quebra[quebras_grafico].sum(axis=1)
         df_composicao_sku_quebra = df_composicao_sku_quebra.sort_values(by='Total_Quebra', ascending=True)
