@@ -126,12 +126,15 @@ COLUNAS_NUMERICAS_COBERTURA = [
 ]
 
 PALETA_EURECICLO = {
-    'Compensada': '#00A859',        # Verde eureciclo
-    'Em Aberto': '#FF5A5F',         # Coral
-    'Projetada': '#0284C7',         # Azul Oceano
-    'Quebra Atual': '#E53E3E',      # Vermelho Alerta
-    'Quebra Projetada': '#DD6B20',  # Laranja Institucional
-    'Quebra Projetada c/ pipe Ops': '#D69E2E', # Âmbar
+    'Compensada': '#00A859',                    # Verde eureciclo
+    'Em Aberto': '#FF5A5F',                     # Coral
+    'Projetada': '#0284C7',                     # Azul Oceano
+    'Quebra Atual': '#E53E3E',                  # Vermelho Alerta
+    'Quebra Projetada': '#DD6B20',              # Laranja Institucional
+    'Quebra Projetada c/ pipe Ops': '#D69E2E',  # Âmbar
+    'Quebra Atual (report)': '#9B2C2C',         # Vermelho Escuro
+    'Quebra Projetada (report)': '#C05621',      # Laranja Escuro
+    'Quebra Projetada c/ pipe Ops (report)': '#B7791F', # Âmbar Escuro
     'Verde_Escala': ['#E6F4EA', '#A3E0BF', '#42C785', '#00A859', '#007A40']
 }
 
@@ -542,7 +545,7 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS EM ABAS (TABS)
+    # TABELAS PIVOTEADAS EM ABAS (TABS) PARA OS 6 TIPOS DE QUEBRA (UF x MATERIAL)
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
@@ -572,44 +575,76 @@ def renderizar_visao_cobertura():
             return styler
         return None
 
-    tab1, tab2, tab3 = st.tabs([
+    # 6 Abas para cada um dos tipos de quebra
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "1. Quebra Atual", 
         "2. Quebra Projetada", 
-        "3. Quebra c/ Pipe Ops"
+        "3. Quebra c/ Pipe Ops",
+        "4. Quebra Atual (Report)",
+        "5. Quebra Projetada (Report)",
+        "6. Quebra c/ Pipe Ops (Report)"
     ])
 
     with tab1:
         styler1 = gerar_styler_pivot('Quebra Atual')
-        if styler1:
-            st.dataframe(styler1, use_container_width=True)
-        else:
-            st.warning("Dados indisponíveis.")
+        if styler1: st.dataframe(styler1, use_container_width=True)
+        else: st.warning("Dados indisponíveis.")
 
     with tab2:
         styler2 = gerar_styler_pivot('Quebra Projetada')
-        if styler2:
-            st.dataframe(styler2, use_container_width=True)
-        else:
-            st.warning("Dados indisponíveis.")
+        if styler2: st.dataframe(styler2, use_container_width=True)
+        else: st.warning("Dados indisponíveis.")
 
     with tab3:
         styler3 = gerar_styler_pivot('Quebra Projetada c/ pipe Ops')
-        if styler3:
-            st.dataframe(styler3, use_container_width=True)
-        else:
-            st.warning("Dados indisponíveis.")
+        if styler3: st.dataframe(styler3, use_container_width=True)
+        else: st.warning("Dados indisponíveis.")
+
+    with tab4:
+        styler4 = gerar_styler_pivot('Quebra Atual (report)')
+        if styler4: st.dataframe(styler4, use_container_width=True)
+        else: st.warning("Dados indisponíveis.")
+
+    with tab5:
+        styler5 = gerar_styler_pivot('Quebra Projetada (report)')
+        if styler5: st.dataframe(styler5, use_container_width=True)
+        else: st.warning("Dados indisponíveis.")
+
+    with tab6:
+        styler6 = gerar_styler_pivot('Quebra Projetada c/ pipe Ops (report)')
+        if styler6: st.dataframe(styler6, use_container_width=True)
+        else: st.warning("Dados indisponíveis.")
 
     st.divider()
 
     st.markdown("#### Composição das Quebras por UF e SKU")
-    opcoes_quebra = ['Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops']
-    quebras_grafico = st.multiselect("Selecione os Tipos de Quebra para visualizar nos gráficos:", options=opcoes_quebra, default=opcoes_quebra, key="cob_multi")
+    
+    # 6 Variáveis para seleção nos gráficos
+    opcoes_quebra = [
+        'Quebra Atual', 
+        'Quebra Projetada', 
+        'Quebra Projetada c/ pipe Ops',
+        'Quebra Atual (report)', 
+        'Quebra Projetada (report)', 
+        'Quebra Projetada c/ pipe Ops (report)'
+    ]
+    
+    # Seleção inicial com as 6 métricas
+    quebras_grafico = st.multiselect(
+        "Selecione os Tipos de Quebra para visualizar nos gráficos:", 
+        options=opcoes_quebra, 
+        default=opcoes_quebra, 
+        key="cob_multi"
+    )
 
     if quebras_grafico:
         mapa_cores_quebra = {
             'Quebra Atual': PALETA_EURECICLO['Quebra Atual'], 
             'Quebra Projetada': PALETA_EURECICLO['Quebra Projetada'], 
-            'Quebra Projetada c/ pipe Ops': PALETA_EURECICLO['Quebra Projetada c/ pipe Ops']
+            'Quebra Projetada c/ pipe Ops': PALETA_EURECICLO['Quebra Projetada c/ pipe Ops'],
+            'Quebra Atual (report)': PALETA_EURECICLO['Quebra Atual (report)'],
+            'Quebra Projetada (report)': PALETA_EURECICLO['Quebra Projetada (report)'],
+            'Quebra Projetada c/ pipe Ops (report)': PALETA_EURECICLO['Quebra Projetada c/ pipe Ops (report)']
         }
 
         # 1. COMPOSIÇÃO DE QUEBRA POR UF (COLUNAS VERTICAIS EMPILHADAS)
