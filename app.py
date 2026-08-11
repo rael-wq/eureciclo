@@ -463,7 +463,7 @@ def renderizar_visao_cobertura():
         st.error(f"Erro ao carregar dados da aba Cobertura / SKU (total): {e}")
         return
 
-    st.title("🛡️ Visão Gerencial - Cobertura e Quebras de Estoque")
+    st.title("🛡️ Visão Gerencial - Cobertura de Estoque")
     st.markdown("Análise detalhada de Quebras e Déficit por SKU.")
 
     st.sidebar.header("Filtros de Cobertura")
