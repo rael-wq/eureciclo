@@ -115,12 +115,14 @@ COLUNAS_NUMERICAS_DEMANDA = ['Compensada', 'Em Aberto', 'Total Contratada', 'Pro
 COLUNAS_EXIBICAO_COBERTURA = [
     'UF', 'material', 'SKU', 'Ano Base',
     'Demanda Atual', 'Demanda Projetada', 'Demanda TOTAL', 
-    'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops'
+    'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops',
+    'Quebra Atual (report)', 'Quebra Projetada (report)', 'Quebra Projetada c/ pipe Ops (report)'
 ]
 
 COLUNAS_NUMERICAS_COBERTURA = [
     'Demanda Atual', 'Demanda Projetada', 'Demanda TOTAL', 
-    'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops'
+    'Quebra Atual', 'Quebra Projetada', 'Quebra Projetada c/ pipe Ops',
+    'Quebra Atual (report)', 'Quebra Projetada (report)', 'Quebra Projetada c/ pipe Ops (report)'
 ]
 
 PALETA_EURECICLO = {
@@ -474,17 +476,27 @@ def renderizar_visao_cobertura():
         st.cache_data.clear()
         st.rerun()
 
-    # CÁLCULOS DOS KPIs E % DE QUEBRAS EM RELAÇÃO À DEMANDA TOTAL
+    # CÁLCULOS DOS KPIs (PADRÃO + REPORT) E % EM RELAÇÃO À DEMANDA TOTAL
     total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
     total_quebra_atual = df_filtrado['Quebra Atual'].sum()
     total_quebra_proj = df_filtrado['Quebra Projetada'].sum()
     total_quebra_pipe = df_filtrado['Quebra Projetada c/ pipe Ops'].sum()
 
+    total_quebra_atual_rep = df_filtrado['Quebra Atual (report)'].sum() if 'Quebra Atual (report)' in df_filtrado.columns else 0
+    total_quebra_proj_rep = df_filtrado['Quebra Projetada (report)'].sum() if 'Quebra Projetada (report)' in df_filtrado.columns else 0
+    total_quebra_pipe_rep = df_filtrado['Quebra Projetada c/ pipe Ops (report)'].sum() if 'Quebra Projetada c/ pipe Ops (report)' in df_filtrado.columns else 0
+
     pct_quebra_atual = (total_quebra_atual / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
     pct_quebra_proj = (total_quebra_proj / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
     pct_quebra_pipe = (total_quebra_pipe / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
 
+    pct_quebra_atual_rep = (total_quebra_atual_rep / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
+    pct_quebra_proj_rep = (total_quebra_proj_rep / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
+    pct_quebra_pipe_rep = (total_quebra_pipe_rep / total_demanda_cob * 100) if total_demanda_cob > 0 else 0
+
     st.subheader("Indicadores Chave de Quebra (KPIs)")
+    
+    # Primeira linha: Demanda + 3 Quebras Padrão
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     kpi1.metric("Demanda a Compensar", f"{total_demanda_cob:,.0f}".replace(",", "."))
     kpi2.metric(
@@ -506,9 +518,31 @@ def renderizar_visao_cobertura():
         delta_color="off"
     )
 
+    st.markdown("##### Indicadores de Quebra (Report)")
+    # Segunda linha: 3 Novos Indicadores (Report)
+    kpi_r1, kpi_r2, kpi_r3 = st.columns(3)
+    kpi_r1.metric(
+        "Quebra Atual (Report)", 
+        f"{total_quebra_atual_rep:,.0f}".replace(",", "."), 
+        f"{pct_quebra_atual_rep:.1f}%".replace(".", ","), 
+        delta_color="off"
+    )
+    kpi_r2.metric(
+        "Quebra Projetada (Report)", 
+        f"{total_quebra_proj_rep:,.0f}".replace(",", "."), 
+        f"{pct_quebra_proj_rep:.1f}%".replace(".", ","), 
+        delta_color="off"
+    )
+    kpi_r3.metric(
+        "Quebra c/ Pipe Ops (Report)", 
+        f"{total_quebra_pipe_rep:,.0f}".replace(",", "."), 
+        f"{pct_quebra_pipe_rep:.1f}%".replace(".", ","), 
+        delta_color="off"
+    )
+
     st.divider()
 
-    # TABELAS PIVOTEADAS EM ABAS (TABS) MANTENDO O COMPONENTE NATIVO ST.DATAFRAME COM RECURSOS COMPLETOS
+    # TABELAS PIVOTEADAS EM ABAS (TABS)
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
@@ -538,8 +572,6 @@ def renderizar_visao_cobertura():
             return styler
         return None
 
-    # Abas para garantir que as tabelas nativas st.dataframe fiquem com 100% da largura da tela,
-    # permitindo ordenação nas colunas, busca, tela cheia e sem comprimir os dados.
     tab1, tab2, tab3 = st.tabs([
         "1. Quebra Atual", 
         "2. Quebra Projetada", 
