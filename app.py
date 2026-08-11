@@ -178,6 +178,10 @@ def colorir_celula_quebra(val):
     else:
         return 'background-color: #FFFFFF; color: #A0AEC0;'
 
+def somar_apenas_negativos(series):
+    vals = pd.to_numeric(series, errors='coerce').fillna(0)
+    return vals[vals < 0].sum()
+
 # ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
 # ==========================================
@@ -484,13 +488,13 @@ def renderizar_visao_cobertura():
         st.cache_data.clear()
         st.rerun()
 
-    # REGRA CRÍTICA: ZERAR QUALQUER VALOR POSITIVO OU NULO NAS MÉTRICAS DE QUEBRA
-    # Garante que NENHUM VALOR POSITIVO seja somado nos KPIs, tabelas ou gráficos
+    # REGRA CRÍTICA DE PROCESSO:
+    # Zerar explicitamente qualquer valor positivo em todas as colunas de quebra no df_filtrado
     for q_col in COLUNAS_QUEBRAS_TODAS:
         if q_col in df_filtrado.columns:
-            df_filtrado[q_col] = df_filtrado[q_col].apply(lambda x: x if x < 0 else 0.0)
+            df_filtrado[q_col] = df_filtrado[q_col].apply(lambda x: float(x) if float(x) < 0 else 0.0)
 
-    # CÁLCULOS DOS KPIs
+    # CÁLCULOS DOS KPIs (VALORES NEGATIVOS EXCLUSIVOS)
     total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
     
     total_quebra_atual = df_filtrado['Quebra Atual'].sum()
@@ -570,11 +574,11 @@ def renderizar_visao_cobertura():
                 index='UF', 
                 columns='material', 
                 values=coluna_metrica, 
-                aggfunc='sum', 
+                aggfunc=somar_apenas_negativos, 
                 fill_value=0
             )
             # Coluna de Total considerando APENAS os valores negativos da linha
-            pivot_df['Total Negativo'] = pivot_df.sum(axis=1)
+            pivot_df['Total Negativo'] = pivot_df.apply(lambda row: row[row < 0].sum(), axis=1)
             
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
             
