@@ -471,7 +471,8 @@ def renderizar_visao_cobertura():
     uf_selecionada = st.sidebar.multiselect("Estado (UF)", sorted(df['UF'].dropna().unique()), key="cob_uf")
     material_selecionado = st.sidebar.multiselect("Material", sorted(df['material'].dropna().unique()), key="cob_mat")
 
-    # 1. Aplicação de filtros do usuário no dataset base completo (MANTÉM VALORES POSITIVOS E NEGATIVOS)
+    # 1. Aplicação de filtros do usuário no dataset base
+    # MANTÉM OS DADOS INTEGRAIS (POSITIVOS E NEGATIVOS) PARA TABELAS PIVOTEADAS E DETALHADAS POR SKU
     df_filtrado = df.copy()
     if ano_selecionado:
         df_filtrado = df_filtrado[df_filtrado['Ano Base'].astype(str).isin(ano_selecionado)]
@@ -485,14 +486,17 @@ def renderizar_visao_cobertura():
         st.cache_data.clear()
         st.rerun()
 
-    # 2. Dataset ESTRITAMENTE NEGATIVO para KPIs e Gráficos
-    # Corta qualquer valor >= 0.0 diretamente em 0.0
+    # 2. DATASET ESTRITAMENTE NEGATIVO PARA INDICADORES E GRÁFICOS SEM VISÃO DE SKU
+    # Quando os valores de quebra não estão abertos por SKU (ex: agregações por UF ou globais em KPIs),
+    # somamos apenas as linhas de SKU cujo saldo seja negativo (< 0).
     df_quebras_negativas = df_filtrado.copy()
     for q_col in COLUNAS_QUEBRAS_TODAS:
         if q_col in df_quebras_negativas.columns:
-            df_quebras_negativas[q_col] = pd.to_numeric(df_quebras_negativas[q_col], errors='coerce').fillna(0.0).clip(upper=0.0)
+            df_quebras_negativas[q_col] = df_quebras_negativas[q_col].apply(
+                lambda x: float(x) if (pd.notna(x) and float(x) < 0) else 0.0
+            )
 
-    # CÁLCULOS DOS KPIs (VALORES NEGATIVOS EXCLUSIVOS DO DF_QUEBRAS_NEGATIVAS)
+    # CÁLCULOS DOS KPIs (VALORES NEGATIVOS EXCLUSIVOS POR SKU)
     total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
     
     total_quebra_atual = df_quebras_negativas['Quebra Atual'].sum()
@@ -559,7 +563,8 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS EM ABAS (TABS) - SOMAM POSITIVOS E NEGATIVOS (DF_FILTRADO ORIGINAL)
+    # TABELAS PIVOTEADAS EM ABAS (TABS) - SOMAM TODOS OS VALORES (POSITIVOS E NEGATIVOS)
+    # Como as tabelas estão não agregadas por SKU/UF/Material, elas exibem o valor cheio das linhas
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
@@ -568,7 +573,7 @@ def renderizar_visao_cobertura():
 
     def gerar_styler_pivot(coluna_metrica):
         if coluna_metrica in df_filtrado.columns and 'UF' in df_filtrado.columns and 'material' in df_filtrado.columns:
-            # Pivot table utilizando df_filtrado completo (soma valores positivos e negativos)
+            # Pivot table com soma líquida completa (positivos e negativos) do df_filtrado
             pivot_df = df_filtrado.pivot_table(
                 index='UF', 
                 columns='material', 
@@ -577,7 +582,7 @@ def renderizar_visao_cobertura():
                 fill_value=0.0
             )
             
-            # Coluna de Total Líquido (Soma de todos os valores da linha: positivos + negativos)
+            # Total Líquido (soma da linha inteira: positivos + negativos)
             pivot_df['Total Líquido'] = pivot_df.sum(axis=1)
             
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
@@ -660,7 +665,7 @@ def renderizar_visao_cobertura():
             'Quebra Projetada c/ pipe Ops (report)': PALETA_EURECICLO['Quebra Projetada c/ pipe Ops (report)']
         }
 
-        # 1. COMPOSIÇÃO DE QUEBRA POR UF (ITEM 1 - UTILIZA ESTRITAMENTE DF_QUEBRAS_NEGATIVAS)
+        # 1. GRÁFICO POR UF (AGREGADO SEM VISÃO DE SKU): UTILIZA O DATASET DE QUEBRAS NEGATIVAS
         df_composicao_uf_quebra = df_quebras_negativas.groupby('UF', as_index=False)[quebras_grafico].sum()
         df_composicao_uf_quebra['UF'] = df_composicao_uf_quebra['UF'].astype(str)
         df_uf_melted_quebra = df_composicao_uf_quebra.melt(id_vars=['UF'], value_vars=quebras_grafico, var_name='Tipo de Quebra', value_name='Valor')
@@ -678,12 +683,8 @@ def renderizar_visao_cobertura():
         )
         st.plotly_chart(fig_comp_uf_quebra, use_container_width=True)
 
-        # 2. COMPOSIÇÃO DE QUEBRA POR SKU (ITEM 2 - UTILIZA ESTRITAMENTE DF_QUEBRAS_NEGATIVAS)
-        # Isola os SKUs agrupando no dataframe negativo e reaplica o teto zero em qualquer coluna de quebra
+        # 2. GRÁFICO POR SKU (ABERTO POR SKU): UTILIZA DADOS ABERTOS POR SKU
         df_sku_base = df_quebras_negativas.groupby('SKU', as_index=False)[quebras_grafico].sum()
-        for q_col in quebras_grafico:
-            df_sku_base[q_col] = pd.to_numeric(df_sku_base[q_col], errors='coerce').fillna(0.0).clip(upper=0.0)
-
         df_sku_base['Total_Quebra'] = df_sku_base[quebras_grafico].sum(axis=1)
         df_sku_base = df_sku_base.sort_values(by='Total_Quebra', ascending=True)
 
@@ -701,9 +702,6 @@ def renderizar_visao_cobertura():
         ordem_y_quebra = df_final_sku_quebra['SKU'].tolist()[::-1]
         df_sku_melted_quebra = df_final_sku_quebra.melt(id_vars=['SKU'], value_vars=quebras_grafico, var_name='Tipo de Quebra', value_name='Valor')
 
-        # Garantir que no dataframe melt nenhum valor seja maior que 0
-        df_sku_melted_quebra['Valor'] = df_sku_melted_quebra['Valor'].clip(upper=0.0)
-
         fig_comp_sku_quebra = px.bar(
             df_sku_melted_quebra, x='Valor', y='SKU', color='Tipo de Quebra', orientation='h',
             title="Composição da Quebra por SKU (Top 20 + Demais SKUs - Somente Déficits Negativos)", color_discrete_map=mapa_cores_quebra, barmode='stack'
@@ -717,7 +715,7 @@ def renderizar_visao_cobertura():
         )
         st.plotly_chart(fig_comp_sku_quebra, use_container_width=True)
 
-    # TABELA DETALHADA COBERTURA / QUEBRAS (SEM COLUNAS DE OFERTA)
+    # TABELA DETALHADA COBERTURA / QUEBRAS (SEM COLUNAS DE OFERTA - MANTÉM DADOS INTEGRAIS POR SKU)
     with st.expander("Ver Dados Detalhados de Quebras"):
         cols_presentes = [c for c in COLUNAS_EXIBICAO_COBERTURA if c in df_filtrado.columns]
         df_tabela_cob = df_filtrado[cols_presentes].copy()
