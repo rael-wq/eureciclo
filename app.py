@@ -296,27 +296,26 @@ def carregar_dados_cobertura():
 @st.cache_data(ttl=600)
 def carregar_dados_cronograma():
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Puxa os dados da aba [DASH] Cronograma a partir da linha 5 (skiprows=4)
+    # Lê a aba [DASH] Cronograma a partir da célula B5 (linha 5 -> skiprows=4)
     df_raw = conn.read(worksheet="[DASH] Cronograma", skiprows=4)
     
+    # Isolar e limpar nome das colunas
+    cols_limpas = [str(col).replace('.1', '').strip() for col in df_raw.columns]
     df = df_raw.copy()
-    df.columns = [str(col).replace('.1', '').strip() for col in df.columns]
+    df.columns = cols_limpas
     
-    # Isolar as 4 colunas principais da tabela inicial
-    colunas_esperadas = ['UF', 'Mês', 'Massa (t)', 'Operadores (#)']
-    presentes = [c for c in colunas_esperadas if c in df.columns]
+    # Seleção estrita das 4 colunas da tabela B5:E
+    df = df.iloc[:, :4].copy()
+    df.columns = ['UF', 'Mês', 'Massa (t)', 'Operadores (#)']
     
-    if len(presentes) == 4:
-        df = df[colunas_esperadas].copy()
-    else:
-        df = df.iloc[:, :4].copy()
-        df.columns = colunas_esperadas
-        
-    df = df.dropna(subset=['UF', 'Mês'])
+    # Remover linhas vazias nas colunas chave
+    df = df.dropna(subset=['UF', 'Mês']).copy()
     
+    # Tratar valores numéricos
     df['Massa (t)'] = df['Massa (t)'].apply(converter_valor_num)
     df['Operadores (#)'] = df['Operadores (#)'].apply(converter_valor_num)
     
+    # Tratar datas e ordenar
     df['Mês_dt'] = pd.to_datetime(df['Mês'], errors='coerce')
     df = df.dropna(subset=['Mês_dt']).sort_values('Mês_dt').reset_index(drop=True)
     
@@ -508,7 +507,6 @@ def renderizar_visao_cobertura():
     material_selecionado = st.sidebar.multiselect("Material", sorted(df['material'].dropna().unique()), key="cob_mat")
 
     # 1. Aplicação de filtros no dataset base
-    # Mantém todos os dados originais (positivos e negativos) para as tabelas
     df_filtrado = df.copy()
     if ano_selecionado:
         df_filtrado = df_filtrado[df_filtrado['Ano Base'].astype(str).isin(ano_selecionado)]
@@ -602,7 +600,6 @@ def renderizar_visao_cobertura():
 
     def gerar_styler_pivot(coluna_metrica):
         if coluna_metrica in df_filtrado.columns and 'UF' in df_filtrado.columns and 'material' in df_filtrado.columns:
-            # Pivot table com soma líquida completa (positivos e negativos) do df_filtrado
             pivot_df = df_filtrado.pivot_table(
                 index='UF', 
                 columns='material', 
@@ -610,8 +607,6 @@ def renderizar_visao_cobertura():
                 aggfunc='sum', 
                 fill_value=0.0
             )
-            
-            # Coluna de Total Líquido (Soma de todos os valores da linha: positivos + negativos)
             pivot_df['Total Líquido'] = pivot_df.sum(axis=1)
             
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
@@ -694,7 +689,7 @@ def renderizar_visao_cobertura():
             'Quebra Projetada c/ pipe Ops (report)': PALETA_EURECICLO['Quebra Projetada c/ pipe Ops (report)']
         }
 
-        # 1. GRÁFICO POR UF (AGREGADO SEM VISÃO DE SKU): FILTRA ESTRITAMENTE APENAS AS LINHAS COM QUEBRA < 0
+        # 1. GRÁFICO POR UF: FILTRA ESTRITAMENTE APENAS AS LINHAS COM QUEBRA < 0
         df_uf_quebra_negativas = df_filtrado.copy()
         for c in quebras_grafico:
             if c in df_uf_quebra_negativas.columns:
@@ -717,7 +712,7 @@ def renderizar_visao_cobertura():
         )
         st.plotly_chart(fig_comp_uf_quebra, use_container_width=True)
 
-        # 2. GRÁFICO POR SKU (ABERTO POR SKU): FILTRA ESTRITAMENTE APENAS AS LINHAS COM QUEBRA < 0
+        # 2. GRÁFICO POR SKU: FILTRA ESTRITAMENTE APENAS AS LINHAS COM QUEBRA < 0
         df_sku_quebra_negativas = df_filtrado.copy()
         for c in quebras_grafico:
             if c in df_sku_quebra_negativas.columns:
@@ -754,7 +749,7 @@ def renderizar_visao_cobertura():
         )
         st.plotly_chart(fig_comp_sku_quebra, use_container_width=True)
 
-    # TABELA DETALHADA COBERTURA / QUEBRAS (SEM COLUNAS DE OFERTA - MANTÉM DADOS INTEGRAIS POR SKU)
+    # TABELA DETALHADA COBERTURA / QUEBRAS
     with st.expander("Ver Dados Detalhados de Quebras"):
         cols_presentes = [c for c in COLUNAS_EXIBICAO_COBERTURA if c in df_filtrado.columns]
         df_tabela_cob = df_filtrado[cols_presentes].copy()
@@ -777,7 +772,11 @@ def renderizar_cronograma_2s26():
 
     # Filtros laterais
     st.sidebar.header("Filtros do Cronograma")
-    meses_disponiveis = sorted(df['Mês_Label'].unique(), key=lambda m: df[df['Mês_Label']==m]['Mês_dt'].min())
+    
+    # Ordena os meses por ordem cronológica real
+    meses_unicos = df[['Mês_Label', 'Mês_dt']].drop_duplicates().sort_values('Mês_dt')
+    meses_disponiveis = meses_unicos['Mês_Label'].tolist()
+    
     mes_selecionado = st.sidebar.multiselect("Mês de Entrega", meses_disponiveis, key="cron_mes")
     uf_selecionada = st.sidebar.multiselect("Estado (UF)", sorted(df['UF'].unique()), key="cron_uf")
 
