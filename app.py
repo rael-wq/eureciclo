@@ -131,6 +131,7 @@ COLUNAS_QUEBRAS_TODAS = [
     'Quebra Atual (report)', 'Quebra Projetada (report)', 'Quebra Projetada c/ pipe Ops (report)'
 ]
 
+# Paleta de Cores Institucionais
 PALETA_EURECICLO = {
     'Compensada': '#00A859',                    # Verde eureciclo
     'Em Aberto': '#FF5A5F',                     # Coral
@@ -142,6 +143,17 @@ PALETA_EURECICLO = {
     'Quebra Projetada (report)': '#C05621',      # Laranja Escuro
     'Quebra Projetada c/ pipe Ops (report)': '#B7791F', # Âmbar Escuro
     'Verde_Escala': ['#E6F4EA', '#A3E0BF', '#42C785', '#00A859', '#007A40']
+}
+
+# Padrão Nacional de Cores da Reciclagem (CONAMA Resolução 275/2001)
+CORES_MATERIAIS_CONAMA = {
+    'PAPEL': '#2563EB',         # Azul (Papel / Papelão)
+    'PLÁSTICO': '#DC2626',      # Vermelho (Plástico)
+    'VIDRO': '#16A34A',         # Verde (Vidro)
+    'METAL': '#EAB308',         # Amarelo (Metal)
+    'PLÁSTICO PP': '#F87171',   # Tom Avermelhado Suave (Derivado de Plástico)
+    'CARTONADO': '#1D4ED8',    # Tom Azul Escuro (Derivado de Papel)
+    'CDRU': '#64748B'           # Cinza (Resíduo Geral / Não Reciclável)
 }
 
 LOGO_EURECICLO_URL = "https://pages.greatpages.com.br/lp.bowe.com.br-lp-eu-logistica/1782305795/imagens/desktop/3604298_1_17823057706a3bd3ea90543409291793.svg"
@@ -249,7 +261,7 @@ st.sidebar.divider()
 
 pagina_selecionada = st.sidebar.radio(
     "Navegação do Dashboard:",
-    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26 (em construção)"]
+    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26"]
 )
 st.sidebar.divider()
 
@@ -296,7 +308,6 @@ def carregar_dados_cobertura():
 @st.cache_data(ttl=600)
 def carregar_dados_cronograma():
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Lê a aba [DASH] Cronograma do Google Sheets
     try:
         df_raw = conn.read(worksheet="[DASH] Cronograma")
     except Exception:
@@ -306,7 +317,6 @@ def carregar_dados_cronograma():
     cols_clean = [str(col).replace('.1', '').strip() for col in df.columns]
     df.columns = cols_clean
 
-    # Mapeamento e identificação robusta das colunas
     col_uf = [c for c in df.columns if c.upper() == 'UF']
     col_mes = [c for c in df.columns if 'mês' in c.lower() or 'mes' in c.lower()]
     col_massa = [c for c in df.columns if 'massa' in c.lower()]
@@ -319,7 +329,6 @@ def carregar_dados_cronograma():
         df = df.iloc[:, :4].copy()
         df.columns = ['UF', 'Mês', 'Massa (t)', 'Operadores (#)']
 
-    # Remover linhas onde UF ou Mês são nulos ou cabeçalhos duplicados
     df = df.dropna(subset=['UF', 'Mês']).copy()
     df = df[df['UF'].astype(str).str.upper() != 'UF'].copy()
     
@@ -329,7 +338,6 @@ def carregar_dados_cronograma():
     df['Mês_dt'] = pd.to_datetime(df['Mês'], errors='coerce')
     df = df.dropna(subset=['Mês_dt']).sort_values('Mês_dt').reset_index(drop=True)
     
-    # Formato estrito mm/yy (ex: 09/26, 10/26, 11/26, 12/26)
     df['Mês_Label'] = df['Mês_dt'].dt.strftime('%m/%y')
     
     return df
@@ -402,10 +410,13 @@ def renderizar_visao_demanda():
 
     with col_graf2:
         df_mat = df_filtrado.groupby('material', as_index=False)['DEMANDA TOTAL'].sum()
+        
+        # Mapeamento do Padrão Nacional de Reciclagem (CONAMA)
         fig_mat = px.pie(
             df_mat, values='DEMANDA TOTAL', names='material', 
-            title="Distribuição da Demanda por Material", hole=0.4,
-            color_discrete_sequence=['#00A859', '#0284C7', '#FF5A5F', '#DD6B20']
+            title="Distribuição da Demanda por Material (Padrão CONAMA)", hole=0.4,
+            color='material',
+            color_discrete_map=CORES_MATERIAIS_CONAMA
         )
         fig_mat.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="%{label}: %{value:,.0f}<extra></extra>")
         fig_mat.update_layout(separators=".,", paper_bgcolor="rgba(0,0,0,0)", font=dict(family="Inter, sans-serif"))
@@ -785,7 +796,6 @@ def renderizar_cronograma_2s26():
     # Filtros laterais
     st.sidebar.header("Filtros do Cronograma")
     
-    # Ordena os meses por ordem cronológica real
     meses_unicos = df[['Mês_Label', 'Mês_dt']].drop_duplicates().sort_values('Mês_dt')
     meses_disponiveis = meses_unicos['Mês_Label'].tolist()
     
@@ -824,7 +834,6 @@ def renderizar_cronograma_2s26():
     col_g1, col_g2 = st.columns(2)
 
     with col_g1:
-        # Agrupamento mensal incluindo as UFs atendidas naquele mês no rótulo do Eixo X
         df_mensal = df_filtrado.groupby(['Mês_dt', 'Mês_Label'], as_index=False).agg({
             'Massa (t)': 'sum',
             'Operadores (#)': 'sum',
