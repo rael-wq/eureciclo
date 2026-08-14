@@ -199,7 +199,7 @@ def carregar_data_atualizacao():
         conn = st.connection("gsheets", type=GSheetsConnection)
         # Lê as duas primeiras linhas da aba >>>>BASES>>> para capturar a célula A2
         df_bases = conn.read(worksheet=">>>>BASES>>>", nrows=2, header=None)
-        if len(df_bases) >= 2 and len(df_bases.columns) > 0:
+        if len(df_bases) >= 1 and len(df_bases.columns) > 1:
             val_a2 = str(df_bases.iloc[1, 0]).strip()
             if val_a2 and val_a2.lower() != 'nan':
                 return val_a2
