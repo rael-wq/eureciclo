@@ -131,7 +131,6 @@ COLUNAS_QUEBRAS_TODAS = [
     'Quebra Atual (report)', 'Quebra Projetada (report)', 'Quebra Projetada c/ pipe Ops (report)'
 ]
 
-# Paleta de Cores Institucionais
 PALETA_EURECICLO = {
     'Compensada': '#00A859',                    # Verde eureciclo
     'Em Aberto': '#FF5A5F',                     # Coral
@@ -192,6 +191,23 @@ def colorir_celula_quebra(val):
         return 'background-color: #FFFFFF; color: #A0AEC0;'
 
 # ==========================================
+# CARREGAMENTO DA DATA DE ATUALIZAÇÃO (A1 DA ABA >>>>BASES>>>)
+# ==========================================
+@st.cache_data(ttl=600)
+def carregar_data_atualizacao():
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        # Lê a célula A1 da aba >>>>BASES>>>
+        df_bases = conn.read(worksheet=">>>>BASES>>>", nrows=1, header=None)
+        if not df_bases.empty and len(df_bases.columns) > 0:
+            val_a1 = str(df_bases.iloc[0, 0]).strip()
+            if val_a1 and val_a1.lower() != 'nan':
+                return val_a1
+    except Exception:
+        pass
+    return "Não informada"
+
+# ==========================================
 # LOGIN E AUTENTICAÇÃO COM GOOGLE
 # ==========================================
 try:
@@ -248,11 +264,31 @@ if not check_login():
     st.stop()
 
 # ==========================================
-# LOGO E NAVEGAÇÃO NO MENU LATERAL (ESQUERDA)
+# LOGO, LOGIN E CARD DE DATA NO MENU LATERAL
 # ==========================================
 st.sidebar.image(LOGO_EURECICLO_URL, width=170)
 st.sidebar.markdown("### Gestão de Operações")
 st.sidebar.success(f"Logado como:\n{st.session_state['user_email']}")
+
+# CARD DA DATA DE ATUALIZAÇÃO DOS DADOS (ABA >>>>BASES>>> A1)
+data_atualizacao_val = carregar_data_atualizacao()
+st.sidebar.markdown(f"""
+    <div style="
+        background-color: #F1F5F9;
+        border: 1px solid #CBD5E1;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-top: 8px;
+        margin-bottom: 12px;
+    ">
+        <div style="font-weight: 600; font-size: 0.78rem; color: #475569; display: flex; align-items: center; gap: 6px;">
+            📅 Data de Atualização
+        </div>
+        <div style="font-weight: 700; font-size: 0.88rem; color: #0B3C5D; margin-top: 4px;">
+            {data_atualizacao_val}
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 if st.sidebar.button("Sair (Logout)"):
     del st.session_state["user_email"]
@@ -261,7 +297,7 @@ st.sidebar.divider()
 
 pagina_selecionada = st.sidebar.radio(
     "Navegação do Dashboard:",
-    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26 (em construção)"]
+    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26"]
 )
 st.sidebar.divider()
 
@@ -411,7 +447,6 @@ def renderizar_visao_demanda():
     with col_graf2:
         df_mat = df_filtrado.groupby('material', as_index=False)['DEMANDA TOTAL'].sum()
         
-        # Mapeamento do Padrão Nacional de Reciclagem (CONAMA)
         fig_mat = px.pie(
             df_mat, values='DEMANDA TOTAL', names='material', 
             title="Distribuição da Demanda por Material (Padrão CONAMA)", hole=0.4,
