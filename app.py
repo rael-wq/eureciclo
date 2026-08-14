@@ -299,7 +299,6 @@ def carregar_dados_cronograma():
     # Lê a aba [DASH] Cronograma a partir da célula B5 (linha 5 -> skiprows=4)
     df_raw = conn.read(worksheet="[DASH] Cronograma", skiprows=4)
     
-    # Isolar e limpar nome das colunas
     cols_limpas = [str(col).replace('.1', '').strip() for col in df_raw.columns]
     df = df_raw.copy()
     df.columns = cols_limpas
@@ -308,22 +307,16 @@ def carregar_dados_cronograma():
     df = df.iloc[:, :4].copy()
     df.columns = ['UF', 'Mês', 'Massa (t)', 'Operadores (#)']
     
-    # Remover linhas vazias nas colunas chave
     df = df.dropna(subset=['UF', 'Mês']).copy()
     
-    # Tratar valores numéricos
     df['Massa (t)'] = df['Massa (t)'].apply(converter_valor_num)
     df['Operadores (#)'] = df['Operadores (#)'].apply(converter_valor_num)
     
-    # Tratar datas e ordenar
     df['Mês_dt'] = pd.to_datetime(df['Mês'], errors='coerce')
     df = df.dropna(subset=['Mês_dt']).sort_values('Mês_dt').reset_index(drop=True)
     
-    meses_pt = {
-        1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
-        7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'
-    }
-    df['Mês_Label'] = df['Mês_dt'].apply(lambda d: f"{meses_pt[d.month]}/{d.year}")
+    # Formato ajustado para "mm/yy"
+    df['Mês_Label'] = df['Mês_dt'].dt.strftime('%m/%y')
     
     return df
 
@@ -600,7 +593,6 @@ def renderizar_visao_cobertura():
 
     def gerar_styler_pivot(coluna_metrica):
         if coluna_metrica in df_filtrado.columns and 'UF' in df_filtrado.columns and 'material' in df_filtrado.columns:
-            # Pivot table com soma líquida completa (positivos e negativos) do df_filtrado
             pivot_df = df_filtrado.pivot_table(
                 index='UF', 
                 columns='material', 
@@ -609,7 +601,6 @@ def renderizar_visao_cobertura():
                 fill_value=0.0
             )
             
-            # Coluna de Total Líquido (Soma de todos os valores da linha: positivos + negativos)
             pivot_df['Total Líquido'] = pivot_df.sum(axis=1)
             
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
@@ -780,7 +771,7 @@ def renderizar_cronograma_2s26():
     meses_unicos = df[['Mês_Label', 'Mês_dt']].drop_duplicates().sort_values('Mês_dt')
     meses_disponiveis = meses_unicos['Mês_Label'].tolist()
     
-    mes_selecionado = st.sidebar.multiselect("Mês de Entrega", meses_disponiveis, key="cron_mes")
+    mes_selecionado = st.sidebar.multiselect("Mês de Entrega (mm/yy)", meses_disponiveis, key="cron_mes")
     uf_selecionada = st.sidebar.multiselect("Estado (UF)", sorted(df['UF'].unique()), key="cron_uf")
 
     df_filtrado = df.copy()
@@ -815,16 +806,24 @@ def renderizar_cronograma_2s26():
     col_g1, col_g2 = st.columns(2)
 
     with col_g1:
-        df_mensal = df_filtrado.groupby(['Mês_dt', 'Mês_Label'], as_index=False)[['Massa (t)', 'Operadores (#)']].sum().sort_values('Mês_dt')
+        # Agrupamento mensal incluindo as UFs atendidas naquele mês no rótulo do Eixo X
+        df_mensal = df_filtrado.groupby(['Mês_dt', 'Mês_Label'], as_index=False).agg({
+            'Massa (t)': 'sum',
+            'Operadores (#)': 'sum',
+            'UF': lambda ufs: ", ".join(sorted(set(ufs)))
+        }).sort_values('Mês_dt')
         
+        # Rótulo do Eixo X com mm/yy e UFs na linha abaixo
+        df_mensal['Eixo_X_Label'] = df_mensal.apply(lambda r: f"{r['Mês_Label']}<br>({r['UF']})", axis=1)
+
         fig_cron_mes = go.Figure()
         fig_cron_mes.add_trace(go.Bar(
-            x=df_mensal['Mês_Label'], y=df_mensal['Massa (t)'],
+            x=df_mensal['Eixo_X_Label'], y=df_mensal['Massa (t)'],
             name="Massa (t)", marker_color=PALETA_EURECICLO['Compensada'],
             hovertemplate="%{x}: %{y:,.0f} t<extra></extra>"
         ))
         fig_cron_mes.add_trace(go.Scatter(
-            x=df_mensal['Mês_Label'], y=df_mensal['Operadores (#)'],
+            x=df_mensal['Eixo_X_Label'], y=df_mensal['Operadores (#)'],
             name="Operadores (#)", yaxis="y2", mode="lines+markers+text",
             text=[f"{v:,.1f}".replace(".", ",") for v in df_mensal['Operadores (#)']],
             textposition="top center", line=dict(color=PALETA_EURECICLO['Projetada'], width=3)
@@ -858,27 +857,12 @@ def renderizar_cronograma_2s26():
 
     st.divider()
 
-    # 3. TABELA PIVOTEADA UF x MÊS E TABELA DETALHADA DE CONSULTA
-    st.subheader("Matriz do Cronograma por Estado x Mês")
-    
+    # 3. TABELA DETALHADA DE CONSULTA DO CRONOGRAMA
     def formatar_numero_br(v):
         try: return f"{v:,.0f}".replace(",", ".")
         except: return v
 
-    pivot_crono = df_filtrado.pivot_table(
-        index='UF', 
-        columns='Mês_Label', 
-        values='Massa (t)', 
-        aggfunc='sum', 
-        fill_value=0.0
-    )
-    pivot_crono['Total Massa (t)'] = pivot_crono.sum(axis=1)
-    pivot_crono = pivot_crono.sort_values(by='Total Massa (t)', ascending=False)
-
-    fmt_crono = {c: formatar_numero_br for c in pivot_crono.columns}
-    st.dataframe(pivot_crono.style.format(fmt_crono), use_container_width=True)
-
-    with st.expander("Ver Tabela de Dados Brutos do Cronograma"):
+    with st.expander("Ver Tabela de Dados do Cronograma", expanded=True):
         st.dataframe(df_filtrado[['UF', 'Mês_Label', 'Massa (t)', 'Operadores (#)']].style.format({
             'Massa (t)': formatar_numero_br,
             'Operadores (#)': lambda v: f"{v:,.1f}".replace(".", ",")
