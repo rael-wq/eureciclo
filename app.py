@@ -247,11 +247,11 @@ if st.sidebar.button("Sair (Logout)"):
     st.rerun()
 st.sidebar.divider()
 
-pagina_selecionada = st.sidebar.radio(
-    "Navegação do Dashboard:",
-    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26 (em construção)"]
-)
-st.sidebar.divider()
+# pagina_selecionada = st.sidebar.radio(
+    # "Navegação do Dashboard:",
+    #["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26 (em construção)"]
+#)
+#st.sidebar.divider()
 
 # ==========================================
 # CARREGAMENTO DOS DADOS (CACHE DE 10 MIN)
