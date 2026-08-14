@@ -261,7 +261,7 @@ st.sidebar.divider()
 
 pagina_selecionada = st.sidebar.radio(
     "Navegação do Dashboard:",
-    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26"]
+    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26 (em construção)"]
 )
 st.sidebar.divider()
 
