@@ -249,7 +249,7 @@ st.sidebar.divider()
 
 pagina_selecionada = st.sidebar.radio(
     "Navegação do Dashboard:",
-    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26 (em construção)"]
+    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26"]
 )
 st.sidebar.divider()
 
@@ -296,18 +296,32 @@ def carregar_dados_cobertura():
 @st.cache_data(ttl=600)
 def carregar_dados_cronograma():
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Lê a aba [DASH] Cronograma a partir da célula B5 (linha 5 -> skiprows=4)
-    df_raw = conn.read(worksheet="[DASH] Cronograma", skiprows=4)
+    # Lê a aba [DASH] Cronograma do Google Sheets
+    try:
+        df_raw = conn.read(worksheet="[DASH] Cronograma")
+    except Exception:
+        df_raw = conn.read(worksheet="[DASH] Cronograma", skiprows=4)
     
-    cols_limpas = [str(col).replace('.1', '').strip() for col in df_raw.columns]
     df = df_raw.copy()
-    df.columns = cols_limpas
-    
-    # Seleção estrita das 4 colunas da tabela B5:E
-    df = df.iloc[:, :4].copy()
-    df.columns = ['UF', 'Mês', 'Massa (t)', 'Operadores (#)']
-    
+    cols_clean = [str(col).replace('.1', '').strip() for col in df.columns]
+    df.columns = cols_clean
+
+    # Mapeamento e identificação robusta das colunas
+    col_uf = [c for c in df.columns if c.upper() == 'UF']
+    col_mes = [c for c in df.columns if 'mês' in c.lower() or 'mes' in c.lower()]
+    col_massa = [c for c in df.columns if 'massa' in c.lower()]
+    col_ops = [c for c in df.columns if 'operador' in c.lower()]
+
+    if col_uf and col_mes and col_massa and col_ops:
+        df = df[[col_uf[0], col_mes[0], col_massa[0], col_ops[0]]].copy()
+        df.columns = ['UF', 'Mês', 'Massa (t)', 'Operadores (#)']
+    else:
+        df = df.iloc[:, :4].copy()
+        df.columns = ['UF', 'Mês', 'Massa (t)', 'Operadores (#)']
+
+    # Remover linhas onde UF ou Mês são nulos ou cabeçalhos duplicados
     df = df.dropna(subset=['UF', 'Mês']).copy()
+    df = df[df['UF'].astype(str).str.upper() != 'UF'].copy()
     
     df['Massa (t)'] = df['Massa (t)'].apply(converter_valor_num)
     df['Operadores (#)'] = df['Operadores (#)'].apply(converter_valor_num)
@@ -315,7 +329,7 @@ def carregar_dados_cronograma():
     df['Mês_dt'] = pd.to_datetime(df['Mês'], errors='coerce')
     df = df.dropna(subset=['Mês_dt']).sort_values('Mês_dt').reset_index(drop=True)
     
-    # Formato estrito para mm/yy (ex: 09/26, 10/26, 11/26, 12/26)
+    # Formato estrito mm/yy (ex: 09/26, 10/26, 11/26, 12/26)
     df['Mês_Label'] = df['Mês_dt'].dt.strftime('%m/%y')
     
     return df
@@ -761,6 +775,10 @@ def renderizar_cronograma_2s26():
         st.error(f"Erro ao carregar dados da aba [DASH] Cronograma: {e}")
         return
 
+    if df.empty:
+        st.warning("⚠️ Não foram encontrados dados na aba [DASH] Cronograma.")
+        return
+
     st.title("📅 Cronograma de Entregas 2S26")
     st.markdown("Consulta e acompanhamento estratégico do cronograma de entregas e operadores por UF.")
 
@@ -813,7 +831,7 @@ def renderizar_cronograma_2s26():
             'UF': lambda ufs: ", ".join(sorted(set(ufs)))
         }).sort_values('Mês_dt')
         
-        # Rótulo do Eixo X com formato mm/yy e lista de UFs na linha abaixo
+        # Rótulo do Eixo X com mm/yy e UFs na linha abaixo
         df_mensal['Eixo_X_Label'] = df_mensal.apply(lambda r: f"{r['Mês_Label']}<br>({r['UF']})", axis=1)
 
         fig_cron_mes = go.Figure()
@@ -831,7 +849,7 @@ def renderizar_cronograma_2s26():
         fig_cron_mes.update_layout(
             title="Evolução Mensal de Massa (t) e Operadores (#)",
             separators=".,",
-            xaxis=dict(tickangle=-90, type='category'), # Rótulos na posição estritamente vertical
+            xaxis=dict(tickangle=-90, type='category'),
             yaxis=dict(title="Massa (t)", tickformat=",.0f"),
             yaxis2=dict(title="Operadores (#)", overlaying="y", side="right", showgrid=False),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
