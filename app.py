@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import requests
 from streamlit_oauth import OAuth2Component
 from streamlit_gsheets import GSheetsConnection
@@ -248,7 +249,7 @@ st.sidebar.divider()
 
 pagina_selecionada = st.sidebar.radio(
     "Navegação do Dashboard:",
-    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura"]
+    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26"]
 )
 st.sidebar.divider()
 
@@ -290,6 +291,41 @@ def carregar_dados_cobertura():
         if col in df.columns:
             df[col] = df[col].apply(converter_valor_num)
             
+    return df
+
+@st.cache_data(ttl=600)
+def carregar_dados_cronograma():
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Puxa os dados da aba [DASH] Cronograma a partir da linha 5 (skiprows=4)
+    df_raw = conn.read(worksheet="[DASH] Cronograma", skiprows=4)
+    
+    df = df_raw.copy()
+    df.columns = [str(col).replace('.1', '').strip() for col in df.columns]
+    
+    # Isolar as 4 colunas principais da tabela inicial
+    colunas_esperadas = ['UF', 'Mês', 'Massa (t)', 'Operadores (#)']
+    presentes = [c for c in colunas_esperadas if c in df.columns]
+    
+    if len(presentes) == 4:
+        df = df[colunas_esperadas].copy()
+    else:
+        df = df.iloc[:, :4].copy()
+        df.columns = colunas_esperadas
+        
+    df = df.dropna(subset=['UF', 'Mês'])
+    
+    df['Massa (t)'] = df['Massa (t)'].apply(converter_valor_num)
+    df['Operadores (#)'] = df['Operadores (#)'].apply(converter_valor_num)
+    
+    df['Mês_dt'] = pd.to_datetime(df['Mês'], errors='coerce')
+    df = df.dropna(subset=['Mês_dt']).sort_values('Mês_dt').reset_index(drop=True)
+    
+    meses_pt = {
+        1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
+        7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'
+    }
+    df['Mês_Label'] = df['Mês_dt'].apply(lambda d: f"{meses_pt[d.month]}/{d.year}")
+    
     return df
 
 # ==========================================
@@ -463,7 +499,7 @@ def renderizar_visao_cobertura():
         st.error(f"Erro ao carregar dados da aba Cobertura / SKU (total): {e}")
         return
 
-    st.title("🛡️ Visão Gerencial - Cobertura de Estoque")
+    st.title("🛡️ Visão Gerencial - Cobertura e Quebras de Estoque")
     st.markdown("Análise detalhada de Quebras e Déficit por SKU.")
 
     st.sidebar.header("Filtros de Cobertura")
@@ -491,7 +527,6 @@ def renderizar_visao_cobertura():
         st.rerun()
 
     # CÁLCULOS DOS KPIs COM INDEXAÇÃO BOOLEANA ESTRITA (< 0)
-    # Filtra linha a linha diretamente no df_filtrado, considerando apenas valores negativos de cada quebra
     total_demanda_cob = df_filtrado['Demanda TOTAL'].sum()
     
     total_quebra_atual = df_filtrado[df_filtrado['Quebra Atual'] < 0]['Quebra Atual'].sum()
@@ -663,7 +698,6 @@ def renderizar_visao_cobertura():
         df_uf_quebra_negativas = df_filtrado.copy()
         for c in quebras_grafico:
             if c in df_uf_quebra_negativas.columns:
-                # Zera explicitamente qualquer valor positivo ou nulo
                 df_uf_quebra_negativas[c] = df_uf_quebra_negativas[c].apply(lambda x: x if x < 0 else 0.0)
 
         df_composicao_uf_quebra = df_uf_quebra_negativas.groupby('UF', as_index=False)[quebras_grafico].sum()
@@ -729,9 +763,130 @@ def renderizar_visao_cobertura():
         st.dataframe(df_tabela_cob.style.format(formato_dict_cob), use_container_width=True)
 
 # ==========================================
+# FUNÇÃO PARA CRONOGRAMA 2S26
+# ==========================================
+def renderizar_cronograma_2s26():
+    try:
+        df = carregar_dados_cronograma()
+    except Exception as e:
+        st.error(f"Erro ao carregar dados da aba [DASH] Cronograma: {e}")
+        return
+
+    st.title("📅 Cronograma de Entregas 2S26")
+    st.markdown("Consulta e acompanhamento estratégico do cronograma de entregas e operadores por UF.")
+
+    # Filtros laterais
+    st.sidebar.header("Filtros do Cronograma")
+    meses_disponiveis = sorted(df['Mês_Label'].unique(), key=lambda m: df[df['Mês_Label']==m]['Mês_dt'].min())
+    mes_selecionado = st.sidebar.multiselect("Mês de Entrega", meses_disponiveis, key="cron_mes")
+    uf_selecionada = st.sidebar.multiselect("Estado (UF)", sorted(df['UF'].unique()), key="cron_uf")
+
+    df_filtrado = df.copy()
+    if mes_selecionado:
+        df_filtrado = df_filtrado[df_filtrado['Mês_Label'].isin(mes_selecionado)]
+    if uf_selecionada:
+        df_filtrado = df_filtrado[df_filtrado['UF'].isin(uf_selecionada)]
+
+    st.sidebar.divider()
+    if st.sidebar.button("🔄 Atualizar Dados", key="cron_reload"):
+        st.cache_data.clear()
+        st.rerun()
+
+    # 1. KPIs
+    total_massa = df_filtrado['Massa (t)'].sum()
+    total_operadores = df_filtrado['Operadores (#)'].sum()
+    qtd_meses = df_filtrado['Mês_dt'].nunique()
+    media_mensal = (total_massa / qtd_meses) if qtd_meses > 0 else 0
+    produtividade = (total_massa / total_operadores) if total_operadores > 0 else 0
+
+    st.subheader("Indicadores de Desempenho do Cronograma")
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    kpi1.metric("Massa Total Planejada", f"{total_massa:,.0f} t".replace(",", "."))
+    kpi2.metric("Operadores Estimados", f"{total_operadores:,.1f} op".replace(".", ","))
+    kpi3.metric("Média Mensal Planejada", f"{media_mensal:,.0f} t/mês".replace(",", "."))
+    kpi4.metric("Produtividade Média", f"{produtividade:,.1f} t/op".replace(".", ","))
+
+    st.divider()
+
+    # 2. GRÁFICOS VISUAIS
+    st.subheader("Análise Cronológica e Geográfica")
+    col_g1, col_g2 = st.columns(2)
+
+    with col_g1:
+        df_mensal = df_filtrado.groupby(['Mês_dt', 'Mês_Label'], as_index=False)[['Massa (t)', 'Operadores (#)']].sum().sort_values('Mês_dt')
+        
+        fig_cron_mes = go.Figure()
+        fig_cron_mes.add_trace(go.Bar(
+            x=df_mensal['Mês_Label'], y=df_mensal['Massa (t)'],
+            name="Massa (t)", marker_color=PALETA_EURECICLO['Compensada'],
+            hovertemplate="%{x}: %{y:,.0f} t<extra></extra>"
+        ))
+        fig_cron_mes.add_trace(go.Scatter(
+            x=df_mensal['Mês_Label'], y=df_mensal['Operadores (#)'],
+            name="Operadores (#)", yaxis="y2", mode="lines+markers+text",
+            text=[f"{v:,.1f}".replace(".", ",") for v in df_mensal['Operadores (#)']],
+            textposition="top center", line=dict(color=PALETA_EURECICLO['Projetada'], width=3)
+        ))
+        fig_cron_mes.update_layout(
+            title="Evolução Mensal de Massa (t) e Operadores (#)",
+            yaxis=dict(title="Massa (t)", tickformat=",.0f", separators=".,"),
+            yaxis2=dict(title="Operadores (#)", overlaying="y", side="right", showgrid=False),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            font=dict(family="Inter, sans-serif")
+        )
+        st.plotly_chart(fig_cron_mes, use_container_width=True)
+
+    with col_g2:
+        df_uf = df_filtrado.groupby('UF', as_index=False)['Massa (t)'].sum().sort_values('Massa (t)', ascending=False)
+        fig_cron_uf = px.bar(
+            df_uf, x='UF', y='Massa (t)',
+            title="Massa Planejada por Estado (UF)",
+            color='Massa (t)',
+            color_continuous_scale=PALETA_EURECICLO['Verde_Escala']
+        )
+        fig_cron_uf.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
+        fig_cron_uf.update_layout(
+            separators=".,", yaxis_tickformat=",.0f", 
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Inter, sans-serif")
+        )
+        st.plotly_chart(fig_cron_uf, use_container_width=True)
+
+    st.divider()
+
+    # 3. TABELA PIVOTEADA UF x MÊS E TABELA DETALHADA DE CONSULTA
+    st.subheader("Matriz do Cronograma por Estado x Mês")
+    
+    def formatar_numero_br(v):
+        try: return f"{v:,.0f}".replace(",", ".")
+        except: return v
+
+    pivot_crono = df_filtrado.pivot_table(
+        index='UF', 
+        columns='Mês_Label', 
+        values='Massa (t)', 
+        aggfunc='sum', 
+        fill_value=0.0
+    )
+    pivot_crono['Total Massa (t)'] = pivot_crono.sum(axis=1)
+    pivot_crono = pivot_crono.sort_values(by='Total Massa (t)', ascending=False)
+
+    fmt_crono = {c: formatar_numero_br for c in pivot_crono.columns}
+    st.dataframe(pivot_crono.style.format(fmt_crono), use_container_width=True)
+
+    with st.expander("Ver Tabela de Dados Brutos do Cronograma"):
+        st.dataframe(df_filtrado[['UF', 'Mês_Label', 'Massa (t)', 'Operadores (#)']].style.format({
+            'Massa (t)': formatar_numero_br,
+            'Operadores (#)': lambda v: f"{v:,.1f}".replace(".", ",")
+        }), use_container_width=True)
+
+# ==========================================
 # ROTEAMENTO DE PÁGINAS
 # ==========================================
 if pagina_selecionada == "📊 Visão de Demanda":
     renderizar_visao_demanda()
 elif pagina_selecionada == "🛡️ Visão de Cobertura":
     renderizar_visao_cobertura()
+elif pagina_selecionada == "📅 Cronograma 2S26":
+    renderizar_cronograma_2s26()
