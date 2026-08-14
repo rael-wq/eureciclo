@@ -191,18 +191,18 @@ def colorir_celula_quebra(val):
         return 'background-color: #FFFFFF; color: #A0AEC0;'
 
 # ==========================================
-# CARREGAMENTO DA DATA DE ATUALIZAÇÃO (A2 DA ABA >>>>BASES>>>)
+# CARREGAMENTO DA DATA DE ATUALIZAÇÃO (B1 DA ABA >>>>BASES>>>)
 # ==========================================
 @st.cache_data(ttl=600)
 def carregar_data_atualizacao():
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        # Lê as duas primeiras linhas da aba >>>>BASES>>> para capturar a célula A2
-        df_bases = conn.read(worksheet=">>>>BASES>>>", nrows=2, header=None)
-        if len(df_bases) >= 2 and len(df_bases.columns) > 0:
-            val_a2 = str(df_bases.iloc[1, 0]).strip()
-            if val_a2 and val_a2.lower() != 'nan':
-                return val_a2
+        # Lê a primeira linha da aba >>>>BASES>>> para capturar a célula B1 (coluna índice 1)
+        df_bases = conn.read(worksheet=">>>>BASES>>>", nrows=1, header=None)
+        if not df_bases.empty and len(df_bases.columns) > 1:
+            val_b1 = str(df_bases.iloc[0, 1]).strip()
+            if val_b1 and val_b1.lower() != 'nan':
+                return val_b1
     except Exception:
         pass
     return "Não informada"
@@ -274,7 +274,7 @@ if st.sidebar.button("Sair (Logout)"):
     del st.session_state["user_email"]
     st.rerun()
 
-# CARD DA DATA DE ATUALIZAÇÃO DOS DADOS (ABA >>>>BASES>>> A2) - POSICIONADO ABAIXO DO LOGOUT
+# CARD DA DATA DE ATUALIZAÇÃO DOS DADOS (ABA >>>>BASES>>> B1) - POSICIONADO ABAIXO DO LOGOUT
 data_atualizacao_val = carregar_data_atualizacao()
 st.sidebar.markdown(f"""
     <div style="
