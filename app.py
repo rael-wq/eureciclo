@@ -248,8 +248,8 @@ if st.sidebar.button("Sair (Logout)"):
 st.sidebar.divider()
 
 pagina_selecionada = st.sidebar.radio(
-"Navegação do Dashboard:",
-["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26 (em construção)"]
+    "Navegação do Dashboard:",
+    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26"]
 )
 st.sidebar.divider()
 
@@ -315,7 +315,7 @@ def carregar_dados_cronograma():
     df['Mês_dt'] = pd.to_datetime(df['Mês'], errors='coerce')
     df = df.dropna(subset=['Mês_dt']).sort_values('Mês_dt').reset_index(drop=True)
     
-    # Formato ajustado para "mm/yy"
+    # Formato estrito para mm/yy (ex: 09/26, 10/26, 11/26, 12/26)
     df['Mês_Label'] = df['Mês_dt'].dt.strftime('%m/%y')
     
     return df
@@ -813,7 +813,7 @@ def renderizar_cronograma_2s26():
             'UF': lambda ufs: ", ".join(sorted(set(ufs)))
         }).sort_values('Mês_dt')
         
-        # Rótulo do Eixo X com mm/yy e UFs na linha abaixo
+        # Rótulo do Eixo X com formato mm/yy e lista de UFs na linha abaixo
         df_mensal['Eixo_X_Label'] = df_mensal.apply(lambda r: f"{r['Mês_Label']}<br>({r['UF']})", axis=1)
 
         fig_cron_mes = go.Figure()
@@ -831,6 +831,7 @@ def renderizar_cronograma_2s26():
         fig_cron_mes.update_layout(
             title="Evolução Mensal de Massa (t) e Operadores (#)",
             separators=".,",
+            xaxis=dict(tickangle=-90, type='category'), # Rótulos na posição estritamente vertical
             yaxis=dict(title="Massa (t)", tickformat=",.0f"),
             yaxis2=dict(title="Operadores (#)", overlaying="y", side="right", showgrid=False),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -854,8 +855,6 @@ def renderizar_cronograma_2s26():
             font=dict(family="Inter, sans-serif")
         )
         st.plotly_chart(fig_cron_uf, use_container_width=True)
-
-    st.divider()
 
     # 3. TABELA DETALHADA DE CONSULTA DO CRONOGRAMA
     def formatar_numero_br(v):
