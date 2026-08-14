@@ -600,6 +600,7 @@ def renderizar_visao_cobertura():
 
     def gerar_styler_pivot(coluna_metrica):
         if coluna_metrica in df_filtrado.columns and 'UF' in df_filtrado.columns and 'material' in df_filtrado.columns:
+            # Pivot table com soma líquida completa (positivos e negativos) do df_filtrado
             pivot_df = df_filtrado.pivot_table(
                 index='UF', 
                 columns='material', 
@@ -607,6 +608,8 @@ def renderizar_visao_cobertura():
                 aggfunc='sum', 
                 fill_value=0.0
             )
+            
+            # Coluna de Total Líquido (Soma de todos os valores da linha: positivos + negativos)
             pivot_df['Total Líquido'] = pivot_df.sum(axis=1)
             
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
@@ -828,7 +831,8 @@ def renderizar_cronograma_2s26():
         ))
         fig_cron_mes.update_layout(
             title="Evolução Mensal de Massa (t) e Operadores (#)",
-            yaxis=dict(title="Massa (t)", tickformat=",.0f", separators=".,"),
+            separators=".,",
+            yaxis=dict(title="Massa (t)", tickformat=",.0f"),
             yaxis2=dict(title="Operadores (#)", overlaying="y", side="right", showgrid=False),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
