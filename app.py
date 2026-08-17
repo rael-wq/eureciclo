@@ -197,7 +197,6 @@ def colorir_celula_quebra(val):
 def carregar_data_atualizacao():
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        # Lê a primeira linha da aba >>>>BASES>>> para capturar a célula B1 (coluna índice 1)
         df_bases = conn.read(worksheet=">>>>BASES>>>", nrows=1, header=None)
         if not df_bases.empty and len(df_bases.columns) > 1:
             val_b1 = str(df_bases.iloc[0, 1]).strip()
@@ -274,7 +273,7 @@ if st.sidebar.button("Sair (Logout)"):
     del st.session_state["user_email"]
     st.rerun()
 
-# CARD DA DATA DE ATUALIZAÇÃO DOS DADOS (ABA >>>>BASES>>> B1) - POSICIONADO ABAIXO DO LOGOUT
+# CARD DA DATA DE ATUALIZAÇÃO DOS DADOS (ABA >>>>BASES>>> B1)
 data_atualizacao_val = carregar_data_atualizacao()
 st.sidebar.markdown(f"""
     <div style="
@@ -298,7 +297,7 @@ st.sidebar.divider()
 
 pagina_selecionada = st.sidebar.radio(
     "Navegação do Dashboard:",
-    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26 (em construção)"]
+    ["📊 Visão de Demanda", "🛡️ Visão de Cobertura", "📅 Cronograma 2S26"]
 )
 st.sidebar.divider()
 
@@ -645,7 +644,7 @@ def renderizar_visao_cobertura():
 
     st.divider()
 
-    # TABELAS PIVOTEADAS EM ABAS (TABS) - SOMAM TODOS OS VALORES (POSITIVOS E NEGATIVOS)
+    # TABELAS PIVOTEADAS EM ABAS (TABS) - QUEBRA TOTAL SOMA EXCLUSIVAMENTE VALORES NEGATIVOS
     st.subheader("Análise Detalhada das Quebras por UF e Material")
 
     def formatar_numero_br(v):
@@ -662,7 +661,8 @@ def renderizar_visao_cobertura():
                 fill_value=0.0
             )
             
-            pivot_df['Total Líquido'] = pivot_df.sum(axis=1)
+            # Substituição de 'Total Líquido' por 'Quebra Total' somando ESTRITAMENTE apenas os valores negativos (< 0)
+            pivot_df['Quebra Total'] = pivot_df.apply(lambda row: row[row < 0].sum(), axis=1)
             
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
             
