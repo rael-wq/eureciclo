@@ -17,12 +17,18 @@ st.set_page_config(
 )
 
 # Estilização CSS inspirada no portal principal da eureciclo (eureciclo.com.br)
+# Inclui regras para ESCONDER o menu de três pontos do canto superior direito
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
 
+    /* Ocultar o menu de três pontos (MainMenu) e o cabeçalho superior */
+    #MainMenu {visibility: hidden !important;}
+    [data-testid="stHeader"] {visibility: hidden !important;}
+    footer {visibility: hidden !important;}
+
     /* Forçar Tema Light Institucional */
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+    html, body, [data-testid="stAppViewContainer"] {
         background-color: #FAFAFA !important;
         color: #2D3748 !important;
         font-family: 'Inter', sans-serif !important;
@@ -661,7 +667,7 @@ def renderizar_visao_cobertura():
                 fill_value=0.0
             )
             
-            # Substituição de 'Total Líquido' por 'Quebra Total' somando ESTRITAMENTE apenas os valores negativos (< 0)
+            # Coluna 'Quebra Total' somando ESTRITAMENTE apenas os valores negativos (< 0)
             pivot_df['Quebra Total'] = pivot_df.apply(lambda row: row[row < 0].sum(), axis=1)
             
             fmt_dict = {c: formatar_numero_br for c in pivot_df.columns}
