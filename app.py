@@ -10,7 +10,7 @@ from streamlit_gsheets import GSheetsConnection
 # CONFIGURAÇÃO GERAL E TEMA INSTITUCIONAL EURECICLO
 # ==========================================
 st.set_page_config(
-    page_title="Dashboard Executivo - eureciclo", 
+    page_title="Dashboard Executivo - eureciclo -", 
     layout="wide", 
     page_icon="♻️",
     initial_sidebar_state="expanded"
